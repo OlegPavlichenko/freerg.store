@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+jinja2
+requests
+apscheduler
+python-telegram-bot==21.6
+tzlocal

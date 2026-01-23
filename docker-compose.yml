@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    container_name: freerg_app
+    env_file: .env
+    volumes:
+      - ./data:/data
+    environment:
+      - DB_PATH=/data/data.sqlite3
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    container_name: freerg_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
