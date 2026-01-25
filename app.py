@@ -484,6 +484,7 @@ def epic_canonicalize(url: str) -> str:
 def fetch_epic(locale=None, country=None):
     locale = locale or EPIC_LOCALE
     country = country or EPIC_COUNTRY
+    print("FETCH_EPIC RUN", locale, country)
 
     url = "https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions"
     params = {"locale": locale, "country": country, "allowCountries": country}
