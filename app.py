@@ -441,29 +441,27 @@ def fetch_itad_steam():
 # SOURCES: Epic
 # --------------------
 def epic_product_url(e: dict, locale: str) -> str:
-    """
-    Строим максимально надёжный URL для Epic.
-    Приоритет:
-      1) productPageSlug (если есть)
-      2) urlSlug (часто уже содержит правильный slug)
-      3) productSlug
-      4) fallback на /free-games
-    Всегда добавляем /{locale}/p/
-    """
-    loc = (locale or "en-US").split("-")[0]  # ru-RU -> ru
+    loc = (locale or "en-US").split("-")[0]
 
-    slug = (e.get("productPageSlug") or "").strip()
-    if not slug:
-        slug = (e.get("urlSlug") or "").strip()
-    if not slug:
-        slug = (e.get("productSlug") or "").strip()
+    # 1) Самый надёжный путь — offerMappings
+    for m in (e.get("offerMappings") or []):
+        if m.get("pageType") == "productHome" and m.get("pageSlug"):
+            slug = m["pageSlug"].strip("/")
+            return f"https://store.epicgames.com/{loc}/p/{slug}"
 
-    if not slug:
-        return f"https://store.epicgames.com/{loc}/free-games"
+    # 2) fallback — старые поля (на всякий случай)
+    slug = (
+        e.get("productPageSlug")
+        or e.get("urlSlug")
+        or e.get("productSlug")
+        or ""
+    ).strip().replace("/home", "").strip("/")
 
-    # иногда прилетает ".../home" — убираем
-    slug = slug.replace("/home", "").strip("/")
-    return f"https://store.epicgames.com/{loc}/p/{slug}"
+    if slug:
+        return f"https://store.epicgames.com/{loc}/p/{slug}"
+
+    # 3) последний fallback
+    return f"https://store.epicgames.com/{loc}/free-games"
 
 def epic_canonicalize(url: str) -> str:
     try:
