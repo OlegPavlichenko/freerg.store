@@ -465,6 +465,21 @@ def epic_product_url(e: dict, locale: str) -> str:
     slug = slug.replace("/home", "").strip("/")
     return f"https://store.epicgames.com/{loc}/p/{slug}"
 
+def epic_canonicalize(url: str) -> str:
+    try:
+        resp = requests.get(
+            url,
+            timeout=15,
+            allow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        # если страница реально существует, resp.url станет канонической
+        if resp.status_code in (200, 301, 302, 303, 307, 308):
+            return str(resp.url)
+    except Exception:
+        pass
+    return url
+
 
 def fetch_epic(locale=None, country=None):
     locale = locale or EPIC_LOCALE
@@ -515,6 +530,8 @@ def fetch_epic(locale=None, country=None):
 
         title = e.get("title") or "Epic freebie"
         page_url = epic_product_url(e, locale)
+        if re.search(r"/p/[^/]+$", page_url):   # очень часто короткий slug заканчивается сразу
+          page_url = epic_canonicalize(page_url)
 
         img = None
         for ki in (e.get("keyImages") or []):
