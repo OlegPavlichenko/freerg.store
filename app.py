@@ -463,6 +463,7 @@ def epic_product_url(e: dict, locale: str) -> str:
     # 3) последний fallback
     return f"https://store.epicgames.com/{loc}/free-games"
 
+
 def epic_canonicalize(url: str) -> str:
     try:
         resp = requests.get(
@@ -608,7 +609,7 @@ def save_deals(deals: list[dict]):
 
 async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None = None):
     """
-    Постим только kind='free_to_keep'.
+    Постим kind in ('free_to_keep', 'free_weekend').
     Если store задан (steam/epic/...), постим только для этого магазина.
     Картинки:
       - Epic: image_url из БД
@@ -622,19 +623,24 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
     sql = """
         SELECT id,store,kind,title,url,image_url,ends_at
         FROM deals
-        WHERE posted=0 AND kind='free_to_keep'
+        WHERE posted=0 AND kind IN ('free_to_keep','free_weekend')
     """
     params: list = []
     if store:
         sql += " AND store=?"
         params.append(store)
 
-    sql += " ORDER BY created_at ASC LIMIT ?"
+    # Сначала "навсегда", потом "временно" (чтобы лента приятнее смотрелась)
+    sql += """
+        ORDER BY
+            CASE kind WHEN 'free_to_keep' THEN 0 ELSE 1 END,
+            created_at ASC
+        LIMIT ?
+    """
     params.append(limit)
 
     rows = conn.execute(sql, tuple(params)).fetchall()
     queued = len(rows)
-
     posted_count = 0
 
     for did, st, kind, title, url, image_url, ends_at in rows:
@@ -651,22 +657,32 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
         if st == "prime":
             extra = "⚠️ Требуется Prime Gaming/подписка.\n"
 
-        tags = ""
-        if st:
-            tags = f"\n#freegame #{st} #giveaway"
+        # заголовок + кнопка по типу раздачи
+        if kind == "free_to_keep":
+            header = "🎁 *Бесплатно навсегда*"
+            button_text = "✅ Забрать навсегда"
+        elif kind == "free_weekend":
+            header = "⏱ *Free Weekend (временно)*"
+            button_text = "🎮 Играть бесплатно"
         else:
-            tags = "\n#freegame #giveaway"
+            header = "🎮 *Акция*"
+            button_text = "🎮 Открыть"
+
+        tags = f"\n#freegame #{st} #giveaway" if st else "\n#freegame #giveaway"
+
+        # если ends_at пустой — строку "До" лучше не показывать
+        expires_line = f"⏳ До: {format_expiry(ends_at)}\n" if ends_at else ""
 
         text = (
-            f"{badge} · 🎁 *Получить 100% скидку!*\n\n"
+            f"{badge} · {header}\n\n"
             f"*{title}*\n"
             f"{extra}"
-            f"⏳ До: {format_expiry(ends_at)}\n"
+            f"{expires_line}"
             f"{tags}"
         )
 
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Забрать", url=url)]
+            [InlineKeyboardButton(button_text, url=url)]
         ])
 
         # выбор картинки
@@ -686,7 +702,6 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
                     reply_markup=kb,
                 )
             else:
-                # fallback: сообщение со ссылкой (Telegram может сделать превью)
                 await bot.send_message(
                     chat_id=TG_CHAT_ID,
                     text=text + f"\n\n{url}",
@@ -701,12 +716,10 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
 
         except Exception as e:
             print("TG SEND ERROR:", e)
-            # не помечаем posted, просто выходим (чтобы не молотить ошибку пачкой)
             break
 
     conn.close()
     return {"posted": posted_count, "queued": queued, "store": store or "all"}
-
 
 async def job_async(store: str = "steam"):
     """
