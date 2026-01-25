@@ -1228,6 +1228,12 @@ def cleanup(keep_days: int = 7):
 # --------------------
 # Startup / Shutdown
 # --------------------
+def run_job(store: str):
+    # APScheduler вызывает обычную функцию (sync),
+    # поэтому запускаем async-джоб через asyncio.run()
+    asyncio.run(job_async(store=store))
+
+
 @app.on_event("startup")
 async def on_startup():
     global _scheduler_started
@@ -1236,44 +1242,59 @@ async def on_startup():
     ensure_columns()
     backfill_defaults()
 
-    # 2) scheduler в --reload может вызываться повторно
+    # 2) startup в проде может вызываться повторно (и при reload тоже)
     if _scheduler_started:
         return
 
     if not scheduler.get_job("steam_job"):
         scheduler.add_job(
-            lambda: asyncio.create_task(job_async(store="steam")),
+            run_job,
             "interval",
             minutes=STEAM_MIN,
             id="steam_job",
             replace_existing=True,
+            kwargs={"store": "steam"},
         )
 
     if not scheduler.get_job("epic_job"):
         scheduler.add_job(
-            lambda: asyncio.create_task(job_async(store="epic")),
+            run_job,
             "interval",
             minutes=EPIC_MIN,
             id="epic_job",
             replace_existing=True,
+            kwargs={"store": "epic"},
         )
 
     if not scheduler.get_job("gog_job"):
-        scheduler.add_job(lambda: asyncio.create_task(job_async(store="gog")),
-            "interval", minutes=GOG_MIN, id="gog_job", replace_existing=True)
+        scheduler.add_job(
+            run_job,
+            "interval",
+            minutes=GOG_MIN,
+            id="gog_job",
+            replace_existing=True,
+            kwargs={"store": "gog"},
+        )
 
     if not scheduler.get_job("prime_job"):
-        scheduler.add_job(lambda: asyncio.create_task(job_async(store="prime")),
-            "interval", minutes=PRIME_MIN, id="prime_job", replace_existing=True)
+        scheduler.add_job(
+            run_job,
+            "interval",
+            minutes=PRIME_MIN,
+            id="prime_job",
+            replace_existing=True,
+            kwargs={"store": "prime"},
+        )
 
     if not scheduler.get_job("cleanup_job"):
         scheduler.add_job(
-        lambda: cleanup_expired(keep_days=7),
-        "interval",
-        hours=24,
-        id="cleanup_job",
-        replace_existing=True,
-    )
+            cleanup_expired,
+            "interval",
+            hours=24,
+            id="cleanup_job",
+            replace_existing=True,
+            kwargs={"keep_days": 7},
+        )
 
     if not scheduler.running:
         scheduler.start()
