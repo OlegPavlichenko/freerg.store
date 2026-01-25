@@ -532,6 +532,7 @@ def fetch_epic(locale=None, country=None):
         page_url = epic_product_url(e, locale)
         if re.search(r"/p/[^/]+$", page_url):   # очень часто короткий slug заканчивается сразу
           page_url = epic_canonicalize(page_url)
+          print("EPIC URL:", page_url)
 
         img = None
         for ki in (e.get("keyImages") or []):
