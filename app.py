@@ -1107,6 +1107,7 @@ PAGE = Template("""
           {% endfor %}
         </div>
       {% endif %}
+     </div>
                 <h2>🔥 Популярные бесплатные игры</h2>
 <div class="grid">
   {% for g in free_games %}
@@ -1117,7 +1118,6 @@ PAGE = Template("""
     </a>
   {% endfor %}
 </div>
-   </div>
   </div>
 </body>
 </html>
