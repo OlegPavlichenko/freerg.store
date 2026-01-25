@@ -1107,7 +1107,17 @@ PAGE = Template("""
           {% endfor %}
         </div>
       {% endif %}
-    </div>
+                <h2>🔥 Популярные бесплатные игры</h2>
+<div class="grid">
+  {% for g in free_games %}
+    <a class="card" href="{{ g[2] }}" target="_blank" rel="noopener">
+      <div class="title">{{ g[1] }}</div>
+      {% if g[4] %}<div class="muted">{{ g[4] }}</div>{% endif %}
+      <div class="muted">{{ g[0] }}</div>
+    </a>
+  {% endfor %}
+</div>
+   </div>
   </div>
 </body>
 </html>
@@ -1137,6 +1147,13 @@ def index(show_expired: int = 0, store: str = "all"):
         ORDER BY created_at DESC
         LIMIT 400
     """).fetchall()
+
+    free_games = conn.execute("""
+    SELECT store,title,url,image_url,note
+    FROM free_games
+    ORDER BY sort ASC, created_at DESC
+    LIMIT 24
+""").fetchall()
 
     conn.close()
 
