@@ -50,10 +50,6 @@ JOB_LOCK = asyncio.Lock()
 # DB helpers
 # --------------------
 def db():
-    """
-    Важно: здесь НЕ создаём индексы по новым колонкам (store/kind),
-    чтобы не падать до миграции. Только базовая таблица и базовые индексы.
-    """
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
       CREATE TABLE IF NOT EXISTS deals (
@@ -69,7 +65,23 @@ def db():
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_posted ON deals(posted)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_created ON deals(created_at)")
+
+    # ✅ добавь это:
+    conn.execute("""
+      CREATE TABLE IF NOT EXISTS free_games (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store TEXT NOT NULL,
+        title TEXT NOT NULL,
+        url TEXT NOT NULL UNIQUE,
+        image_url TEXT,
+        note TEXT,
+        sort INTEGER DEFAULT 100,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    """)
+
     return conn
+
 
 
 def ensure_columns():
@@ -1191,9 +1203,19 @@ def store_badge(store: str | None) -> str:
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(show_expired: int = 0, store: str = "all"):
+def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     conn = db()
 
+    # нормализуем параметры
+    store = (store or "all").strip().lower()
+    if store not in {"all", "steam", "epic", "gog", "prime"}:
+        store = "all"
+
+    kind = (kind or "all").strip().lower()
+    if kind not in {"all", "keep", "weekend", "free"}:
+        kind = "all"
+
+    # вытаскиваем данные
     keep_rows = conn.execute("""
         SELECT store,title,url,image_url,ends_at,created_at
         FROM deals
@@ -1210,32 +1232,28 @@ def index(show_expired: int = 0, store: str = "all"):
         LIMIT 400
     """).fetchall()
 
-    free_games = conn.execute("""
-    SELECT store,title,url,image_url,note
-    FROM free_games
-    ORDER BY sort ASC, created_at DESC
-    LIMIT 24
-""").fetchall()
+    free_games_rows = conn.execute("""
+        SELECT store,title,url,image_url,note
+        FROM free_games
+        ORDER BY sort ASC, created_at DESC
+        LIMIT 24
+    """).fetchall()
 
     conn.close()
 
-    # фильтр по времени (актуальные/истёкшие за неделю)
+    # фильтр по времени
     def allow_time(ends_at: str | None) -> bool:
         if is_active_end(ends_at):
             return True
         return bool(show_expired) and is_expired_recent(ends_at, days=7)
 
-    # фильтр по магазину (вкладки)
-    store = (store or "all").strip().lower()
-    allowed_stores = {"all", "steam", "epic", "gog", "prime"}
-    if store not in allowed_stores:
-        store = "all"
-
+    # фильтр по магазину
     def allow_store(row_store: str | None) -> bool:
         if store == "all":
             return True
         return (row_store or "").strip().lower() == store
 
+    # собираем keep
     keep = [{
         "store_badge": store_badge(r[0]),
         "title": r[1],
@@ -1249,6 +1267,7 @@ def index(show_expired: int = 0, store: str = "all"):
         "time_left": time_left_label(r[4]),
     } for r in keep_rows if allow_time(r[4]) and allow_store(r[0])]
 
+    # собираем weekend
     weekend = [{
         "store_badge": store_badge(r[0]),
         "title": r[1],
@@ -1265,50 +1284,34 @@ def index(show_expired: int = 0, store: str = "all"):
     keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
     weekend.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
 
-    kind = request.args.get("kind", "all")  # all | keep | weekend | free
-
-    free_games_rows = conn.execute("""
-    SELECT store, title, url, image_url, note
-    FROM free_games
-    ORDER BY sort ASC, created_at DESC
-    LIMIT 24
-    """).fetchall()
-
+    # ✅ free_games для сайта (с картинкой)
     free_games = []
     for st, title, url, image_url, note in free_games_rows:
-      st = (st or "").strip().lower()
+        st_norm = (st or "").strip().lower()
+        img = image_url or ""
+        if not img and st_norm == "steam":
+            img = steam_header_cdn_from_url(url) or ""
 
-    store_badge = {
-        "steam": "🎮 Steam",
-        "epic": "🟦 Epic",
-        "gog": "🟪 GOG",
-        "prime": "🟨 Prime",
-    }.get(st, st or "Store")
-
-    # картинка: если в таблице пусто — строим для Steam по appid
-    img = image_url
-    if not img and st == "steam":
-        img = steam_header_cdn_from_url(url)
-
-    free_games.append({
-        "store": st,
-        "store_badge": store_badge,
-        "title": title,
-        "url": url,
-        "image_url": img,
-        "note": note,
-    })
+        free_games.append({
+            "store": st_norm,
+            "store_badge": store_badge(st_norm),
+            "title": title,
+            "url": url,
+            "image_url": img,
+            "note": note,
+        })
 
     return PAGE.render(
         keep=keep,
         weekend=weekend,
+        free_games=free_games,
         steam_min=STEAM_MIN,
         epic_min=EPIC_MIN,
         show_expired=int(show_expired),
         store=store,
         kind=kind,
-        free_games=free_games,
     )
+
 
 
 # --------------------
