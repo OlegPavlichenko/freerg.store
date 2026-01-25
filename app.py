@@ -440,6 +440,32 @@ def fetch_itad_steam():
 # --------------------
 # SOURCES: Epic
 # --------------------
+def epic_product_url(e: dict, locale: str) -> str:
+    """
+    Строим максимально надёжный URL для Epic.
+    Приоритет:
+      1) productPageSlug (если есть)
+      2) urlSlug (часто уже содержит правильный slug)
+      3) productSlug
+      4) fallback на /free-games
+    Всегда добавляем /{locale}/p/
+    """
+    loc = (locale or "en-US").split("-")[0]  # ru-RU -> ru
+
+    slug = (e.get("productPageSlug") or "").strip()
+    if not slug:
+        slug = (e.get("urlSlug") or "").strip()
+    if not slug:
+        slug = (e.get("productSlug") or "").strip()
+
+    if not slug:
+        return f"https://store.epicgames.com/{loc}/free-games"
+
+    # иногда прилетает ".../home" — убираем
+    slug = slug.replace("/home", "").strip("/")
+    return f"https://store.epicgames.com/{loc}/p/{slug}"
+
+
 def fetch_epic(locale=None, country=None):
     locale = locale or EPIC_LOCALE
     country = country or EPIC_COUNTRY
@@ -488,8 +514,7 @@ def fetch_epic(locale=None, country=None):
             continue
 
         title = e.get("title") or "Epic freebie"
-        product_slug = e.get("productSlug") or e.get("urlSlug") or ""
-        page_url = f"https://store.epicgames.com/p/{product_slug.replace('/home','')}" if product_slug else "https://store.epicgames.com/free-games"
+        page_url = epic_product_url(e, locale)
 
         img = None
         for ki in (e.get("keyImages") or []):
