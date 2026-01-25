@@ -259,6 +259,22 @@ def steam_header_image_from_url(url: str) -> str | None:
         return None
     return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
 
+import re
+
+def steam_header_cdn_from_url(url: str) -> str | None:
+    """
+    Быстро строит ссылку на обложку Steam по appid из URL:
+    https://cdn.akamai.steamstatic.com/steam/apps/<appid>/header.jpg
+    """
+    if not url:
+        return None
+    m = re.search(r"/app/(\d+)", url)
+    if not m:
+        return None
+    appid = m.group(1)
+    return f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg"
+
+
 
 # --------------------
 # SOURCES: ITAD (Prime)
@@ -995,7 +1011,14 @@ PAGE = Template("""
       </div>
 
       <div class="controls">
-        {% set base = "/?show_expired=" ~ show_expired %}
+        {% set base = "/?show_expired=" ~ show_expired ~ "&kind=" ~ kind %}
+                {% set base_kind = base ~ "&store=" ~ store %}
+<div class="seg" title="Фильтр по типу раздачи">
+  {% if kind == "all" %}<span class="on">Все</span>{% else %}<a href="{{ base_kind }}&kind=all">Все</a>{% endif %}
+  {% if kind == "keep" %}<span class="on">🎁 Навсегда</span>{% else %}<a href="{{ base_kind }}&kind=keep">🎁 Навсегда</a>{% endif %}
+  {% if kind == "weekend" %}<span class="on">⏱ Временно</span>{% else %}<a href="{{ base_kind }}&kind=weekend">⏱ Временно</a>{% endif %}
+  {% if kind == "free" %}<span class="on">🔥 Бесплатные</span>{% else %}<a href="{{ base_kind }}&kind=free">🔥 Бесплатные</a>{% endif %}
+</div>
         <div class="seg" title="Фильтр по магазину">
           {% if store == "all" %}<span class="on">Все</span>{% else %}<a href="{{ base }}&store=all">Все</a>{% endif %}
           {% if store == "steam" %}<span class="on">🎮 Steam</span>{% else %}<a href="{{ base }}&store=steam">🎮 Steam</a>{% endif %}
@@ -1016,6 +1039,7 @@ PAGE = Template("""
       </div>
     </div>
 
+                {% if kind in ["all", "keep"] %}
     <div class="section">
       <h2>🆓 Free to keep</h2>
       {% if keep|length == 0 %}
@@ -1062,7 +1086,9 @@ PAGE = Template("""
         </div>
       {% endif %}
     </div>
+                {% endif %}
 
+{% if kind in ["all", "weekend"] %}
     <div class="section">
       <h2>⏱ Free weekend / временно</h2>
       {% if weekend|length == 0 %}
@@ -1108,16 +1134,52 @@ PAGE = Template("""
         </div>
       {% endif %}
      </div>
-                <h2>🔥 Популярные бесплатные игры</h2>
-<div class="grid">
-  {% for g in free_games %}
-    <a class="card" href="{{ g[2] }}" target="_blank" rel="noopener">
-      <div class="title">{{ g[1] }}</div>
-      {% if g[4] %}<div class="muted">{{ g[4] }}</div>{% endif %}
-      <div class="muted">{{ g[0] }}</div>
-    </a>
-  {% endfor %}
+          {% endif %}
+                {% if kind in ["all", "free"] %}
+<div class="section">
+  <h2>🔥 Популярные бесплатные игры</h2>
+
+  {% if free_games is not defined or free_games|length == 0 %}
+    <div class="empty">Пока список бесплатных игр не заполнен.</div>
+  {% else %}
+    <div class="grid">
+      {% for g in free_games %}
+      <div class="card">
+        <div class="thumb">
+          {% if g["image_url"] %}
+            <img src="{{ g["image_url"] }}" alt="cover"/>
+          {% else %}
+            <div class="ph">Нет обложки</div>
+          {% endif %}
+        </div>
+
+        <div class="body">
+          <div class="row1">
+            <span class="badge">{{ g["store_badge"] }}</span>
+            <span class="meta">
+              <span class="pill ok">FREE TO PLAY</span>
+            </span>
+          </div>
+
+          <div class="title">{{ g["title"] }}</div>
+
+          {% if g["note"] %}
+            <div class="row1">
+              <span class="pill">{{ g["note"] }}</span>
+            </div>
+          {% endif %}
+
+          <div class="actions" style="margin-top:10px;">
+            <a class="btn primary" href="{{ g["url"] }}" target="_blank">Играть</a>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 </div>
+{% endif %}
+
   </div>
 </body>
 </html>
@@ -1203,6 +1265,40 @@ def index(show_expired: int = 0, store: str = "all"):
     keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
     weekend.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
 
+    kind = request.args.get("kind", "all")  # all | keep | weekend | free
+
+    free_games_rows = conn.execute("""
+    SELECT store, title, url, image_url, note
+    FROM free_games
+    ORDER BY sort ASC, created_at DESC
+    LIMIT 24
+    """).fetchall()
+
+    free_games = []
+    for st, title, url, image_url, note in free_games_rows:
+      st = (st or "").strip().lower()
+
+    store_badge = {
+        "steam": "🎮 Steam",
+        "epic": "🟦 Epic",
+        "gog": "🟪 GOG",
+        "prime": "🟨 Prime",
+    }.get(st, st or "Store")
+
+    # картинка: если в таблице пусто — строим для Steam по appid
+    img = image_url
+    if not img and st == "steam":
+        img = steam_header_cdn_from_url(url)
+
+    free_games.append({
+        "store": st,
+        "store_badge": store_badge,
+        "title": title,
+        "url": url,
+        "image_url": img,
+        "note": note,
+    })
+
     return PAGE.render(
         keep=keep,
         weekend=weekend,
@@ -1210,6 +1306,8 @@ def index(show_expired: int = 0, store: str = "all"):
         epic_min=EPIC_MIN,
         show_expired=int(show_expired),
         store=store,
+        kind=kind,
+        free_games=free_games,
     )
 
 
