@@ -808,6 +808,7 @@ PAGE = Template("""
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>FreeRedeemGames</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101a33'/%3E%3Ctext x='50%25' y='56%25' font-size='34' text-anchor='middle'%3E%F0%9F%8E%AE%3C/text%3E%3C/svg%3E">
   <style>
     :root{
       --bg:#0b1020;
@@ -994,6 +995,28 @@ PAGE = Template("""
       border-radius: var(--radius);
       padding: 14px;
     }
+     .toast{
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  background: rgba(16,26,51,.95);
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.toast.on{
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
+}
+button.btn{font-family: inherit}
+
   </style>
 </head>
 
@@ -1071,6 +1094,7 @@ PAGE = Template("""
               <div class="row1">
                 <span class="badge">{{ d["store_badge"] }}</span>
                 <span class="meta">
+                <span class="pill ok">FREE</span>
   {% if d["is_new"] %}
     <span class="pill ok">🆕 NEW</span>
   {% endif %}
@@ -1090,7 +1114,7 @@ PAGE = Template("""
                 </div>
               <div class="actions" style="margin-top:10px;">
                 <a class="btn primary" href="{{ d["url"] }}" target="_blank">Открыть</a>
-                <a class="btn" href="{{ d["url"] }}" target="_blank">Копировать ссылку</a>
+                <button class="btn copy" data-url="{{ d["url"] }}">Копировать ссылку</button>
               </div>
             </div>
           </div>
@@ -1120,6 +1144,7 @@ PAGE = Template("""
               <div class="row1">
                 <span class="badge">{{ d["store_badge"] }}</span>
                 <span class="meta">
+                <span class="pill ok">FREE WEEKEND</span>
   {% if d["is_new"] %}
     <span class="pill ok">🆕 NEW</span>
   {% endif %}
@@ -1139,7 +1164,8 @@ PAGE = Template("""
               </div>
               <div class="actions" style="margin-top:10px;">
                 <a class="btn primary" href="{{ d["url"] }}" target="_blank">Открыть</a>
-              </div>
+              <button class="btn copy" data-url="{{ d["url"] }}">Копировать ссылку</button>
+                </div>
             </div>
           </div>
           {% endfor %}
@@ -1193,6 +1219,45 @@ PAGE = Template("""
 {% endif %}
 
   </div>
+                <div id="toast" class="toast">Ссылка скопирована ✅</div>
+<script>
+(function(){
+  const toast = document.getElementById("toast");
+  let t = null;
+
+  function showToast(msg){
+    if (!toast) return;
+    toast.textContent = msg || "Готово ✅";
+    toast.classList.add("on");
+    clearTimeout(t);
+    t = setTimeout(() => toast.classList.remove("on"), 1200);
+  }
+
+  async function copyText(text){
+    try{
+      await navigator.clipboard.writeText(text);
+      showToast("Ссылка скопирована ✅");
+    }catch(e){
+      // fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      showToast("Ссылка скопирована ✅");
+    }
+  }
+
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".copy");
+    if (!btn) return;
+    e.preventDefault();
+    const url = btn.getAttribute("data-url") || "";
+    if (url) copyText(url);
+  });
+})();
+</script>
 </body>
 </html>
 """)
