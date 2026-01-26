@@ -104,6 +104,15 @@ def ensure_columns():
     if "image_url" not in cols:
         add("image_url TEXT")
 
+    if "discount_pct" not in cols:
+        add("discount_pct INTEGER")
+    if "price_old" not in cols:
+        add("price_old REAL")
+    if "price_new" not in cols:
+        add("price_new REAL")
+    if "currency" not in cols:
+        add("currency TEXT")
+
     # индексы на новые колонки — только после миграции
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_store ON deals(store)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_kind ON deals(kind)")
@@ -464,6 +473,86 @@ def fetch_itad_steam():
 
     return out
 
+def fetch_itad_steam_hot_deals(min_cut: int = 70):
+    """
+    Steam hot deals через ITAD deals/v2.
+    Берём скидки cut >= min_cut и НЕ бесплатные (чтобы не дублировать free_to_keep).
+    """
+    if not ITAD_API_KEY:
+        return []
+
+    endpoint = "https://api.isthereanydeal.com/deals/v2"
+    params = {
+        "key": ITAD_API_KEY,
+        "shops": "61",     # Steam
+        "limit": "200",
+        "sort": "-cut",
+    }
+
+    r = requests.get(endpoint, params=params, timeout=25)
+    r.raise_for_status()
+    data = r.json()
+
+    if isinstance(data, list):
+        items = data
+    else:
+        items = data.get("list") or data.get("data") or data.get("items") or data.get("result") or []
+
+    out = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+
+        deal = it.get("deal") if isinstance(it.get("deal"), dict) else it
+        cut = deal.get("cut")
+        if cut is None or cut < min_cut:
+            continue
+
+        # не берём бесплатные, чтобы не дублировать free_to_keep
+        price_obj = deal.get("price") or {}
+        price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
+        if cut == 100 or price_amount == 0:
+            continue
+
+        title = it.get("title") or it.get("name") or deal.get("title") or deal.get("name") or "Steam deal"
+        url = deal.get("url") or it.get("url")
+        if not url:
+            continue
+
+        expiry = deal.get("expiry") or it.get("expiry")
+        start = deal.get("start") or it.get("start")
+
+        # пробуем достать "было/стало" (если ITAD отдаёт)
+        regular_obj = deal.get("regular") or deal.get("regularPrice") or deal.get("regular_price") or {}
+        old_amount = regular_obj.get("amount") if isinstance(regular_obj, dict) else None
+
+        currency = price_obj.get("currency") if isinstance(price_obj, dict) else None
+
+        # external_id как app_id если есть
+        app_id = ""
+        m = re.search(r"/app/(\d+)", url)
+        if m:
+            app_id = m.group(1)
+
+        out.append({
+            "store": "steam",
+            "external_id": app_id,
+            "kind": "hot_deal",
+            "title": title,
+            "url": url,
+            "image_url": None,
+            "source": "itad",
+            "starts_at": start,
+            "ends_at": expiry,
+            "discount_pct": int(cut) if cut is not None else None,
+            "price_old": old_amount,
+            "price_new": price_amount,
+            "currency": currency,
+        })
+
+    return out
+
+
 
 # --------------------
 # SOURCES: Epic
@@ -612,22 +701,26 @@ def save_deals(deals: list[dict]):
         cur = conn.execute("SELECT id FROM deals WHERE id=?", (did,))
         if cur.fetchone() is None:
             conn.execute(
-                "INSERT INTO deals (id,store,external_id,kind,title,url,image_url,source,starts_at,ends_at,posted,created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,0,?)",
-                (
-                    did,
-                    store,
-                    external_id,
-                    d.get("kind", ""),
-                    d.get("title", ""),
-                    url,
-                    d.get("image_url", ""),
-                    d.get("source", ""),
-                    d.get("starts_at"),
-                    d.get("ends_at"),
-                    now,
-                ),
-            )
+    "INSERT INTO deals (id,store,external_id,kind,title,url,image_url,source,starts_at,ends_at,discount_pct,price_old,price_new,currency,posted,created_at) "
+    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
+    (
+        did,
+        store,
+        external_id,
+        d.get("kind", ""),
+        d.get("title", ""),
+        url,
+        d.get("image_url", ""),
+        d.get("source", ""),
+        d.get("starts_at"),
+        d.get("ends_at"),
+        d.get("discount_pct"),
+        d.get("price_old"),
+        d.get("price_new"),
+        d.get("currency"),
+        now,
+    ),
+)
             new_items += 1
 
     conn.commit()
@@ -765,7 +858,7 @@ async def job_async(store: str = "steam"):
             st = (store or "").strip().lower()
 
             if st == "steam":
-                deals = fetch_itad_steam()
+                deals = fetch_itad_steam() + fetch_itad_steam_hot_deals(70)
                 new_items = save_deals(deals)
                 tg = await post_unposted_to_telegram(limit=POST_LIMIT, store="steam")
 
@@ -1052,6 +1145,7 @@ button.btn{font-family: inherit}
   {% if kind == "all" %}<span class="on">Все</span>{% else %}<a href="{{ base_kind }}&kind=all">Все</a>{% endif %}
   {% if kind == "keep" %}<span class="on">🎁 Навсегда</span>{% else %}<a href="{{ base_kind }}&kind=keep">🎁 Навсегда</a>{% endif %}
   {% if kind == "weekend" %}<span class="on">⏱ Временно</span>{% else %}<a href="{{ base_kind }}&kind=weekend">⏱ Временно</a>{% endif %}
+  {% if kind == "deals" %}<span class="on">💸 Deals 70%+</span>{% else %}<a href="{{ base_kind }}&kind=deals">💸 Deals 70%+</a>{% endif %}
   {% if kind == "free" %}<span class="on">🔥 Бесплатные</span>{% else %}<a href="{{ base_kind }}&kind=free">🔥 Бесплатные</a>{% endif %}
 </div>
         <div class="seg" title="Фильтр по магазину">
@@ -1173,6 +1267,59 @@ button.btn{font-family: inherit}
       {% endif %}
      </div>
           {% endif %}
+
+{% if kind in ["all", "deals"] %}
+<div class="section">
+  <h2>💸 Hot deals 70%+</h2>
+  {% if hot|length == 0 %}
+    <div class="empty">Пока нет подходящих скидок под текущий фильтр.</div>
+  {% else %}
+    <div class="grid">
+      {% for d in hot %}
+      <div class="card">
+        <div class="thumb">
+          {% if d["image"] %}
+            <img src="{{ d["image"] }}" alt="cover"/>
+          {% else %}
+            <div class="ph">Нет обложки</div>
+          {% endif %}
+        </div>
+        <div class="body">
+          <div class="row1">
+            <span class="badge">{{ d["store_badge"] }}</span>
+            <span class="meta">
+              {% if d["discount_pct"] %}
+                <span class="pill ok">💸 -{{ d["discount_pct"] }}%</span>
+              {% endif %}
+              {% if d["is_new"] %}
+                <span class="pill ok">🆕 NEW</span>
+              {% endif %}
+            </span>
+          </div>
+
+          <div class="title">{{ d["title"] }}</div>
+
+          <div class="row1">
+            {% if d["ends_at_fmt"] %}
+              <span class="pill">⏳ До: {{ d["ends_at_fmt"] }}</span>
+            {% endif %}
+            {% if d["time_left"] and not d["expired"] %}
+              <span class="pill ok">⏱ {{ d["time_left"] }}</span>
+            {% endif %}
+          </div>
+
+          <div class="actions" style="margin-top:10px;">
+            <a class="btn primary" href="{{ d["url"] }}" target="_blank">Открыть</a>
+            <button class="btn copy" data-url="{{ d["url"] }}">Копировать ссылку</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endif %}
+
                 {% if kind in ["all", "free"] %}
 <div class="section">
   <h2>🔥 Популярные бесплатные игры</h2>
@@ -1277,7 +1424,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         store = "all"
 
     kind = (kind or "all").strip().lower()
-    if kind not in {"all", "keep", "weekend", "free"}:
+    if kind not in {"all", "keep", "weekend", "free", "deals"}:
         kind = "all"
 
     # вытаскиваем данные
@@ -1293,6 +1440,14 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         SELECT store,title,url,image_url,ends_at,created_at
         FROM deals
         WHERE kind='free_weekend'
+        ORDER BY created_at DESC
+        LIMIT 400
+    """).fetchall()
+
+    hot_rows = conn.execute("""
+        SELECT store,title,url,image_url,ends_at,created_at,discount_pct,price_old,price_new,currency
+        FROM deals
+        WHERE kind='hot_deal'
         ORDER BY created_at DESC
         LIMIT 400
     """).fetchall()
@@ -1346,8 +1501,30 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "time_left": time_left_label(r[4]),
     } for r in weekend_rows if allow_time(r[4]) and allow_store(r[0])]
 
+    # собираем hot
+
+    hot = [{
+        "store_badge": store_badge(r[0]),
+        "title": r[1],
+        "url": r[2],
+        "image": (r[3] or "") or (steam_header_image_from_url(r[2]) if (r[0] or "").lower() == "steam" else ""),
+        "ends_at": r[4],
+        "is_new": is_new(r[5]),
+        "ends_at_fmt": format_expiry(r[4]),
+        "created_at": r[5],
+        "expired": not is_active_end(r[4]),
+        "time_left": time_left_label(r[4]),
+        "discount_pct": r[6],
+        "price_old": r[7],
+        "price_new": r[8],
+        "currency": r[9],
+    } for r in hot_rows if allow_time(r[4]) and allow_store(r[0])]
+
+
     keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
     weekend.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
+    hot.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
+
 
     # ✅ free_games для сайта (с картинкой)
     free_games = []
@@ -1375,6 +1552,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         show_expired=int(show_expired),
         store=store,
         kind=kind,
+        hot=hot,
     )
 
 
