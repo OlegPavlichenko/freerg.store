@@ -485,7 +485,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70):
     params = {
         "key": ITAD_API_KEY,
         "shops": "61",     # Steam
-        "limit": "200",
+        "limit": "100",
         "sort": "-cut",
     }
 
@@ -1586,8 +1586,8 @@ def backfill():
 
 @app.get("/update")
 async def update_now(store: str = "steam"):
-    result = await job_async(store=store)
-    return {"ok": True, "result": result}
+    asyncio.create_task(job_async(store=store))
+    return {"ok": True, "queued": True, "store": store}
 
 
 @app.get("/testpost")
