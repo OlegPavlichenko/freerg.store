@@ -16,7 +16,11 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             set -e
-            cd /opt/freerg
-            /opt/freerg/deploy.sh
-            curl -fsS http://127.0.0.1:8000/health >/dev/null
-            echo "OK: health"
+            /usr/local/bin/freerg-deploy
+            for i in {1..20}; do
+              curl -fsS http://127.0.0.1:8000/health >/dev/null && echo "OK: health" && exit 0
+              sleep 1
+            done
+            echo "Health check failed"
+            journalctl -u freerg -n 80 --no-pager || true
+            exit 1
