@@ -16,7 +16,7 @@ from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
 
 # --------------------
 # CONFIG (env)
-# --------------------
+# -----------------------------------------------------
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN", "")
 TG_CHAT_ID = os.getenv("TG_CHAT_ID", "@freeredeemgames")
 
