@@ -473,7 +473,7 @@ def fetch_itad_steam():
 
     return out
 
-def fetch_itad_steam_hot_deals(min_cut: int = 70):
+def fetch_itad_steam_hot_deals(min_cut: int = 5):
     """
     Steam hot deals через ITAD deals/v2.
     Берём скидки cut >= min_cut и НЕ бесплатные (чтобы не дублировать free_to_keep).
@@ -485,7 +485,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70):
     params = {
         "key": ITAD_API_KEY,
         "shops": "61",     # Steam
-        "limit": "40",
+        "limit": "5",
         "sort": "-cut",
         }
     return out[:60]
