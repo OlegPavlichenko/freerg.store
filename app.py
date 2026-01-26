@@ -487,7 +487,8 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70):
         "shops": "61",     # Steam
         "limit": "40",
         "sort": "-cut",
-    }
+        }
+    return out[:60]
 
     r = requests.get(endpoint, params=params, timeout=25)
     r.raise_for_status()
@@ -1583,6 +1584,9 @@ def backfill():
     backfill_defaults()
     return {"ok": True}
 
+
+def job_sync(store: str = "steam"):
+    return asyncio.run(job_async(store=store))
 
 @app.get("/update")
 async def update_now(store: str = "steam"):
