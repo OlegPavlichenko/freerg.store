@@ -1588,11 +1588,11 @@ def backfill():
 def job_sync(store: str = "steam"):
     return asyncio.run(job_async(store=store))
 
+import subprocess
+
 @app.get("/update")
 async def update_now(store: str = "steam"):
-    if JOB_LOCK.locked():
-        return {"ok": True, "queued": False, "reason": "job already running", "store": store}
-    asyncio.create_task(asyncio.to_thread(job_sync, store))
+    subprocess.Popen(["systemctl", "start", f"freerg-update@{store}.service"])
     return {"ok": True, "queued": True, "store": store}
 
 
