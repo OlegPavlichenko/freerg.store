@@ -1202,7 +1202,7 @@ def store_badge(store: str | None) -> str:
     return {"steam": "🎮 Steam", "epic": "🟦 Epic", "gog": "🟪 GOG", "prime": "🟨 Prime"}.get(store or "", store or "Store")
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     conn = db()
 
@@ -1317,7 +1317,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
 # --------------------
 # API endpoints
 # --------------------
-@app.api_route("/health", methods=["GET", "HEAD"])
+@app.get("/health")
 def health():
     return {"ok": True}
 
