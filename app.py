@@ -485,7 +485,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70):
     params = {
         "key": ITAD_API_KEY,
         "shops": "61",     # Steam
-        "limit": "100",
+        "limit": "40",
         "sort": "-cut",
     }
 
