@@ -43,7 +43,7 @@ bot = Bot(token=TG_BOT_TOKEN) if TG_BOT_TOKEN else None
 
 scheduler = AsyncIOScheduler()
 _scheduler_started = False
-JOB_LOCK = asyncio.Lock()
+
 
 
 # --------------------
