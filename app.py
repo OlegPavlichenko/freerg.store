@@ -1586,7 +1586,9 @@ def backfill():
 
 @app.get("/update")
 async def update_now(store: str = "steam"):
-    asyncio.create_task(job_async(store=store))
+    if JOB_LOCK.locked():
+        return {"ok": True, "queued": False, "reason": "job already running", "store": store}
+    asyncio.create_task(asyncio.to_thread(job_sync, store))
     return {"ok": True, "queued": True, "store": store}
 
 
