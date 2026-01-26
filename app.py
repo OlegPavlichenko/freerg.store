@@ -1317,7 +1317,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
 # --------------------
 # API endpoints
 # --------------------
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"ok": True}
 
