@@ -50,6 +50,11 @@ _scheduler_started = False
 # --------------------
 def db():
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA temp_store=MEMORY;")
+    conn.execute("PRAGMA busy_timeout=5000;")
+
     conn.execute("""
       CREATE TABLE IF NOT EXISTS deals (
         id TEXT PRIMARY KEY,
@@ -64,11 +69,7 @@ def db():
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_posted ON deals(posted)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_created ON deals(created_at)")
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous=NORMAL;")
-    conn.execute("PRAGMA temp_store=MEMORY;")
-    conn.execute("PRAGMA busy_timeout=5000;")
-
+    
     # ✅ добавь это:
     conn.execute("""
       CREATE TABLE IF NOT EXISTS free_games (
@@ -253,28 +254,20 @@ def cleanup_expired(keep_days: int = 7) -> int:
 # --------------------
 # Steam image helpers
 # --------------------
-def extract_steam_app_id(url: str) -> str | None:
-    # 1) прямой Steam Store URL
+def extract_steam_app_id_fast(url: str) -> str | None:
     m = re.search(r"store\.steampowered\.com/app/(\d+)", url)
     if m:
         return m.group(1)
-
-    # 2) любой /app/12345
     m = re.search(r"/app/(\d+)", url)
     if m:
         return m.group(1)
-
-    # 3) пробуем раскрыть редирект (ITAD / трекеры) — аккуратно
-    try:
-        resp = requests.get(url, timeout=15, allow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
-        final_url = str(resp.url)
-        m = re.search(r"store\.steampowered\.com/app/(\d+)", final_url)
-        if m:
-            return m.group(1)
-    except Exception:
-        pass
-
     return None
+
+def steam_header_image_from_url_fast(url: str) -> str | None:
+    app_id = extract_steam_app_id_fast(url)
+    if not app_id:
+        return None
+    return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
 
 
 def steam_header_image_from_url(url: str) -> str | None:
@@ -1420,7 +1413,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         FROM deals
         WHERE kind='free_to_keep'
         ORDER BY created_at DESC
-        LIMIT 400
+        LIMIT 150
     """).fetchall()
 
     weekend_rows = conn.execute("""
@@ -1428,7 +1421,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         FROM deals
         WHERE kind='free_weekend'
         ORDER BY created_at DESC
-        LIMIT 400
+        LIMIT 150
     """).fetchall()
 
     hot_rows = conn.execute("""
@@ -1436,7 +1429,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         FROM deals
         WHERE kind='hot_deal'
         ORDER BY created_at DESC
-        LIMIT 400
+        LIMIT 100
     """).fetchall()
 
     free_games_rows = conn.execute("""
@@ -1465,7 +1458,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "store_badge": store_badge(r[0]),
         "title": r[1],
         "url": r[2],
-        "image": (r[3] or "") or (steam_header_image_from_url(r[2]) if (r[0] or "").lower() == "steam" else ""),
+        "image": (r[3] or "") or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
         "ends_at": r[4],
         "is_new": is_new(r[5]),
         "ends_at_fmt": format_expiry(r[4]),
@@ -1479,7 +1472,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "store_badge": store_badge(r[0]),
         "title": r[1],
         "url": r[2],
-        "image": (r[3] or "") or (steam_header_image_from_url(r[2]) if (r[0] or "").lower() == "steam" else ""),
+        "image": (r[3] or "") or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
         "ends_at": r[4],
         "is_new": is_new(r[5]),
         "ends_at_fmt": format_expiry(r[4]),
@@ -1494,7 +1487,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "store_badge": store_badge(r[0]),
         "title": r[1],
         "url": r[2],
-        "image": (r[3] or "") or (steam_header_image_from_url(r[2]) if (r[0] or "").lower() == "steam" else ""),
+        "image": (r[3] or "") or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
         "ends_at": r[4],
         "is_new": is_new(r[5]),
         "ends_at_fmt": format_expiry(r[4]),
