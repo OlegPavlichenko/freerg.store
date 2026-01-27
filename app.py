@@ -302,7 +302,7 @@ def resolve_steam_app_id_limited(url: str, allow_slow: bool = True) -> str | Non
 
 
 def steam_header_image_from_url(url: str) -> str | None:
-    app_id = extract_steam_app_id(url)
+    app_id = extract_steam_app_id_fast(url)
     if not app_id:
         return None
     return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
@@ -505,38 +505,30 @@ def fetch_itad_steam():
     return out
 
 
-def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 60):
+def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 30):
     if not ITAD_API_KEY:
         return []
 
     endpoint = "https://api.isthereanydeal.com/deals/v2"
-    params = {
-        "key": ITAD_API_KEY,
-        "shops": "61",
-        "limit": str(limit),
-        "sort": "-cut",
-    }
+    params = {"key": ITAD_API_KEY, "shops": "61", "limit": str(limit), "sort": "-cut"}
 
     r = requests.get(endpoint, params=params, timeout=25)
     r.raise_for_status()
     data = r.json()
-
     items = data if isinstance(data, list) else (data.get("list") or data.get("data") or data.get("items") or data.get("result") or [])
-    resolved_slow = 0
+
     out = []
     for it in items:
         if not isinstance(it, dict):
             continue
-
         deal = it.get("deal") if isinstance(it.get("deal"), dict) else it
+
         cut = deal.get("cut")
         if cut is None or cut < min_cut:
             continue
 
         price_obj = deal.get("price") or {}
         price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
-
-        # не бесплатные
         if cut == 100 or price_amount == 0:
             continue
 
@@ -552,18 +544,8 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 
         old_amount = regular_obj.get("amount") if isinstance(regular_obj, dict) else None
         currency = price_obj.get("currency") if isinstance(price_obj, dict) else None
 
-        app_id = ""
-        m = re.search(r"/app/(\d+)", url)
-        if m:
-            
-            app_id = extract_steam_app_id_fast(url)
-            if not app_id and resolved_slow < 15:
-             resolved_slow += 1
-            app_id = resolve_steam_app_id_limited(url, allow_slow=True) or ""
-        else:
-           app_id = app_id or ""
-
-           image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
+        app_id = extract_steam_app_id_fast(url) or ""
+        image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
 
         out.append({
             "store": "steam",
@@ -582,6 +564,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 
         })
 
     return out[:keep]
+
 
 # --------------------
 # SOURCES: Epic
