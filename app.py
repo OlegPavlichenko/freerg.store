@@ -1329,12 +1329,14 @@ button.btn{font-family: inherit}
           {% for d in weekend %}
           <div class="card">
             <div class="thumb">
-              {% if g["image_url"] %}
-  <img src="{{ g["image_url"] }}" alt="cover"/>
-{% else %}
-  <div class="ph">Нет обложки</div>
-{% endif %}
-
+  {% if d["image"] %}
+    <img src="{{ d["image"] }}" alt="cover"
+         onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
+         data-fallback="{{ d.get('image_fallback','') }}"/>
+  {% else %}
+    <div class="ph">Нет обложки</div>
+  {% endif %}
+</div>
             </div>
             <div class="body">
               <div class="row1">
@@ -1372,6 +1374,8 @@ button.btn{font-family: inherit}
 
 {% if kind in ["all", "deals"] %}
 <div class="section">
+                
+
   <h2>💸 Hot deals 70%+</h2>
   {% if hot|length == 0 %}
     <div class="empty">Пока нет подходящих скидок под текущий фильтр.</div>
@@ -1380,13 +1384,14 @@ button.btn{font-family: inherit}
       {% for d in hot %}
       <div class="card">
         <div class="thumb">
-          {% if g["image_url"] %}
-  <img src="{{ g["image_url"] }}" alt="cover"/>
-{% else %}
-  <div class="ph">Нет обложки</div>
-{% endif %}
-
-        </div>
+  {% if d["image"] %}
+    <img src="{{ d["image"] }}" alt="cover"
+         onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
+         data-fallback="{{ d.get('image_fallback','') }}"/>
+  {% else %}
+    <div class="ph">Нет обложки</div>
+  {% endif %}
+</div>
         <div class="body">
           <div class="row1">
             <span class="badge">{{ d["store_badge"] }}</span>
@@ -1425,6 +1430,9 @@ button.btn{font-family: inherit}
 
                 {% if kind in ["all", "free"] %}
 <div class="section">
+                
+
+
   <h2>🔥 Популярные бесплатные игры</h2>
 
   {% if free_games is not defined or free_games|length == 0 %}
@@ -1434,16 +1442,12 @@ button.btn{font-family: inherit}
       {% for g in free_games %}
       <div class="card">
         <div class="thumb">
-          {% if g["image_url"] %}
-            <img src="{{ d["image"] }}" alt="cover"
-     onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
-     data-fallback="{{ d.get('image_fallback','') }}"/>
-
-          {% else %}
-            <div class="ph">Нет обложки</div>
-          {% endif %}
-        </div>
-
+  {% if g["image_url"] %}
+    <img src="{{ g["image_url"] }}" alt="cover"/>
+  {% else %}
+    <div class="ph">Нет обложки</div>
+  {% endif %}
+</div>
         <div class="body">
           <div class="row1">
             <span class="badge">{{ g["store_badge"] }}</span>
