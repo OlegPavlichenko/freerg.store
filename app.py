@@ -22,7 +22,7 @@ TG_CHAT_ID = os.getenv("TG_CHAT_ID", "@freeredeemgames")
 
 ITAD_API_KEY = os.getenv("ITAD_API_KEY", "")
 
-DB_PATH = os.getenv("DB_PATH", "data.sqlite3")
+DB_PATH = os.getenv("DB_PATH", "/opt/freerg/data/data.sqlite3")
 
 # расписания (аккуратно)
 STEAM_MIN = int(os.getenv("STEAM_MIN", "180"))     # Steam/ITAD раз в 60 минут
