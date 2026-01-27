@@ -485,7 +485,8 @@ def fetch_itad_steam_hot_deals(min_cut: int = 5):
         "limit": "5",
         "sort": "-cut",
         }
-    
+    return out [60]
+
     r = requests.get(endpoint, params=params, timeout=25)
     r.raise_for_status()
     data = r.json()
@@ -548,7 +549,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 5):
             "currency": currency,
         })
 
-    return out [60]
+    return out
 
 
 
