@@ -1270,7 +1270,6 @@ button.btn{font-family: inherit}
                 <img src="{{ d["image"] }}" alt="cover"
      onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
      data-fallback="{{ d.get('image_fallback','') }}"/>
-
               {% else %}
                 <div class="ph">Нет обложки</div>
               {% endif %}
@@ -1323,7 +1322,6 @@ button.btn{font-family: inherit}
                 <img src="{{ d["image"] }}" alt="cover"
      onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
      data-fallback="{{ d.get('image_fallback','') }}"/>
-
               {% else %}
                 <div class="ph">Нет обложки</div>
               {% endif %}
@@ -1527,7 +1525,6 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     if kind not in {"all", "keep", "weekend", "free", "deals"}:
         kind = "all"
 
-    # вытаскиваем данные
     keep_rows = conn.execute("""
         SELECT store,title,url,image_url,ends_at,created_at
         FROM deals
@@ -1561,82 +1558,105 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
 
     conn.close()
 
-    # фильтр по времени
     def allow_time(ends_at: str | None) -> bool:
         if is_active_end(ends_at):
             return True
         return bool(show_expired) and is_expired_recent(ends_at, days=7)
 
-    # фильтр по магазину
     def allow_store(row_store: str | None) -> bool:
         if store == "all":
             return True
         return (row_store or "").strip().lower() == store
-    appid = extract_steam_app_id_fast(r[2]) if (r[0] or "").lower() == "steam" else None
-    cands = steam_header_candidates(appid) if appid else []
-    image_main = (r[3] or "") or (cands[1] if len(cands)>1 else (cands[0] if cands else ""))
-    image_fb = cands[2] if len(cands)>2 else (cands[0] if cands else "")
 
-    # собираем keep
-    keep = [{
-        "store_badge": store_badge(r[0]),
-        "title": r[1],
-        "url": r[2],
-        "image" : r[3] or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
-        "ends_at": r[4],
-        "is_new": is_new(r[5]),
-        "ends_at_fmt": format_expiry(r[4]),
-        "created_at": r[5],
-        "expired": not is_active_end(r[4]),
-        "time_left": time_left_label(r[4]),
-        "image": image_main,
-        "image_fallback": image_fb,
-    } for r in keep_rows if allow_time(r[4]) and allow_store(r[0])]
+    def images_for_row(row_store: str | None, url: str, image_url: str | None):
+        st = (row_store or "").strip().lower()
+        if image_url:
+            return image_url, ""  # есть готовая обложка
+        if st != "steam":
+            return "", ""
 
-    # собираем weekend
-    weekend = [{
-        "store_badge": store_badge(r[0]),
-        "title": r[1],
-        "url": r[2],
-        "image" : r[3] or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
-        "ends_at": r[4],
-        "is_new": is_new(r[5]),
-        "ends_at_fmt": format_expiry(r[4]),
-        "created_at": r[5],
-        "expired": not is_active_end(r[4]),
-        "time_left": time_left_label(r[4]),
-        "image": image_main,
-        "image_fallback": image_fb,
-    } for r in weekend_rows if allow_time(r[4]) and allow_store(r[0])]
+        appid = extract_steam_app_id_fast(url)
+        if not appid:
+            return "", ""
 
-    # собираем hot
+        cands = steam_header_candidates(appid)
+        # основной — akamai (обычно лучше), fallback — cloudflare/fastly
+        main = cands[1] if len(cands) > 1 else (cands[0] if cands else "")
+        fb = cands[2] if len(cands) > 2 else (cands[0] if cands else "")
+        return main, fb
 
-    hot = [{
-        "store_badge": store_badge(r[0]),
-        "title": r[1],
-        "url": r[2],
-        "image" : r[3] or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
-        "ends_at": r[4],
-        "is_new": is_new(r[5]),
-        "ends_at_fmt": format_expiry(r[4]),
-        "created_at": r[5],
-        "expired": not is_active_end(r[4]),
-        "time_left": time_left_label(r[4]),
-        "discount_pct": r[6],
-        "price_old": r[7],
-        "price_new": r[8],
-        "currency": r[9],
-        "image": image_main,
-        "image_fallback": image_fb,
-    } for r in hot_rows if allow_store(r[0])]
+    # keep
+    keep = []
+    for r in keep_rows:
+        if not (allow_time(r[4]) and allow_store(r[0])):
+            continue
+        img_main, img_fb = images_for_row(r[0], r[2], r[3])
 
+        keep.append({
+            "store_badge": store_badge(r[0]),
+            "title": r[1],
+            "url": r[2],
+            "image": img_main,
+            "image_fallback": img_fb,
+            "ends_at": r[4],
+            "is_new": is_new(r[5]),
+            "ends_at_fmt": format_expiry(r[4]),
+            "created_at": r[5],
+            "expired": not is_active_end(r[4]),
+            "time_left": time_left_label(r[4]),
+        })
+
+    # weekend
+    weekend = []
+    for r in weekend_rows:
+        if not (allow_time(r[4]) and allow_store(r[0])):
+            continue
+        img_main, img_fb = images_for_row(r[0], r[2], r[3])
+
+        weekend.append({
+            "store_badge": store_badge(r[0]),
+            "title": r[1],
+            "url": r[2],
+            "image": img_main,
+            "image_fallback": img_fb,
+            "ends_at": r[4],
+            "is_new": is_new(r[5]),
+            "ends_at_fmt": format_expiry(r[4]),
+            "created_at": r[5],
+            "expired": not is_active_end(r[4]),
+            "time_left": time_left_label(r[4]),
+        })
+
+    # hot (по магазину фильтруем, по времени можно НЕ фильтровать)
+    hot = []
+    for r in hot_rows:
+        if not allow_store(r[0]):
+            continue
+        img_main, img_fb = images_for_row(r[0], r[2], r[3])
+
+        hot.append({
+            "store_badge": store_badge(r[0]),
+            "title": r[1],
+            "url": r[2],
+            "image": img_main,
+            "image_fallback": img_fb,
+            "ends_at": r[4],
+            "is_new": is_new(r[5]),
+            "ends_at_fmt": format_expiry(r[4]),
+            "created_at": r[5],
+            "expired": not is_active_end(r[4]),
+            "time_left": time_left_label(r[4]),
+            "discount_pct": r[6],
+            "price_old": r[7],
+            "price_new": r[8],
+            "currency": r[9],
+        })
 
     keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
     weekend.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
     hot.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
 
-
-    # ✅ free_games для сайта (с картинкой)
+    # free_games
     free_games = []
     for st, title, url, image_url, note in free_games_rows:
         st_norm = (st or "").strip().lower()
@@ -1664,8 +1684,6 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         kind=kind,
         hot=hot,
     )
-
-
 
 # --------------------
 # API endpoints
