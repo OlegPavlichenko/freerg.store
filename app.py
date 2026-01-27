@@ -64,6 +64,10 @@ def db():
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_posted ON deals(posted)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_created ON deals(created_at)")
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA temp_store=MEMORY;")
+    conn.execute("PRAGMA busy_timeout=5000;")
 
     # ✅ добавь это:
     conn.execute("""
