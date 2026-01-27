@@ -299,6 +299,16 @@ def resolve_steam_app_id_limited(url: str, allow_slow: bool = True) -> str | Non
     except Exception:
         return None
 
+def resolve_steam_app_id_slow(url: str) -> str | None:
+    """
+    Делает 1 HTTP запрос с редиректами и пытается вытащить appid из финального URL.
+    Использовать ТОЛЬКО в update job (fetch_*), НЕ в рендере страниц.
+    """
+    try:
+        resp = requests.get(url, timeout=10, allow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
+        return extract_steam_app_id_fast(str(resp.url))
+    except Exception:
+        return None
 
 
 def steam_header_image_from_url(url: str) -> str | None:
@@ -516,7 +526,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 
     r.raise_for_status()
     data = r.json()
     items = data if isinstance(data, list) else (data.get("list") or data.get("data") or data.get("items") or data.get("result") or [])
-
+    slow_left = 15
     out = []
     for it in items:
         if not isinstance(it, dict):
@@ -544,9 +554,12 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 
         old_amount = regular_obj.get("amount") if isinstance(regular_obj, dict) else None
         currency = price_obj.get("currency") if isinstance(price_obj, dict) else None
 
-        app_id = extract_steam_app_id_fast(url) or ""
+        app_id = extract_steam_app_id_fast(url)
+        if not app_id and slow_left > 0:
+         slow_left -= 1
+         app_id = resolve_steam_app_id_slow(url)
+         app_id = app_id or ""
         image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
-
         out.append({
             "store": "steam",
             "external_id": app_id,
