@@ -269,6 +269,16 @@ def steam_header_image_from_url_fast(url: str) -> str | None:
         return None
     return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
 
+def steam_header_candidates(app_id: str) -> list[str]:
+    if not app_id:
+        return []
+    return [
+        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg",
+        f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{app_id}/header.jpg",
+        f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{app_id}/header.jpg",
+    ]
+
+
 def resolve_steam_app_id(url: str) -> str | None:
     """
     Добывает appid:
@@ -316,6 +326,12 @@ def steam_header_image_from_url(url: str) -> str | None:
     if not app_id:
         return None
     return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
+
+def steam_best_header_from_url(url: str) -> str | None:
+    app_id = extract_steam_app_id_fast(url)
+    if not app_id:
+        return None
+    return steam_header_candidates(app_id)[0]  # первый как основной
 
 import re
 
@@ -498,7 +514,8 @@ def fetch_itad_steam():
         else:
          app_id = app_id or ""
 
-        image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
+        cands = steam_header_candidates(app_id)
+        image_url = cands[1] if len(cands) > 1 else (cands[0] if cands else None)
 
         out.append({
             "store": "steam",
@@ -577,10 +594,8 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
             app_id = resolve_steam_app_id_slow(url)
 
         app_id = app_id or ""
-        image_url = (
-            f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
-            if app_id else None
-        )
+        cands = steam_header_candidates(app_id)
+        image_url = cands[1] if len(cands) > 1 else (cands[0] if cands else None)
 
         out.append({
             "store": "steam",
@@ -1252,7 +1267,10 @@ button.btn{font-family: inherit}
           <div class="card">
             <div class="thumb">
               {% if d["image"] %}
-                <img src="{{ d["image"] }}" alt="cover"/>
+                <img src="{{ d["image"] }}" alt="cover"
+     onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
+     data-fallback="{{ d.get('image_fallback','') }}"/>
+
               {% else %}
                 <div class="ph">Нет обложки</div>
               {% endif %}
@@ -1302,7 +1320,10 @@ button.btn{font-family: inherit}
           <div class="card">
             <div class="thumb">
               {% if d["image"] %}
-                <img src="{{ d["image"] }}" alt="cover"/>
+                <img src="{{ d["image"] }}" alt="cover"
+     onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
+     data-fallback="{{ d.get('image_fallback','') }}"/>
+
               {% else %}
                 <div class="ph">Нет обложки</div>
               {% endif %}
@@ -1352,7 +1373,10 @@ button.btn{font-family: inherit}
       <div class="card">
         <div class="thumb">
           {% if d["image"] %}
-            <img src="{{ d["image"] }}" alt="cover"/>
+            <img src="{{ d["image"] }}" alt="cover"
+     onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
+     data-fallback="{{ d.get('image_fallback','') }}"/>
+
           {% else %}
             <div class="ph">Нет обложки</div>
           {% endif %}
@@ -1405,7 +1429,10 @@ button.btn{font-family: inherit}
       <div class="card">
         <div class="thumb">
           {% if g["image_url"] %}
-            <img src="{{ g["image_url"] }}" alt="cover"/>
+            <img src="{{ d["image"] }}" alt="cover"
+     onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
+     data-fallback="{{ d.get('image_fallback','') }}"/>
+
           {% else %}
             <div class="ph">Нет обложки</div>
           {% endif %}
@@ -1545,6 +1572,10 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         if store == "all":
             return True
         return (row_store or "").strip().lower() == store
+    appid = extract_steam_app_id_fast(r[2]) if (r[0] or "").lower() == "steam" else None
+    cands = steam_header_candidates(appid) if appid else []
+    image_main = (r[3] or "") or (cands[1] if len(cands)>1 else (cands[0] if cands else ""))
+    image_fb = cands[2] if len(cands)>2 else (cands[0] if cands else "")
 
     # собираем keep
     keep = [{
@@ -1558,6 +1589,8 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "created_at": r[5],
         "expired": not is_active_end(r[4]),
         "time_left": time_left_label(r[4]),
+        "image": image_main,
+        "image_fallback": image_fb,
     } for r in keep_rows if allow_time(r[4]) and allow_store(r[0])]
 
     # собираем weekend
@@ -1572,6 +1605,8 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "created_at": r[5],
         "expired": not is_active_end(r[4]),
         "time_left": time_left_label(r[4]),
+        "image": image_main,
+        "image_fallback": image_fb,
     } for r in weekend_rows if allow_time(r[4]) and allow_store(r[0])]
 
     # собираем hot
@@ -1591,6 +1626,8 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "price_old": r[7],
         "price_new": r[8],
         "currency": r[9],
+        "image": image_main,
+        "image_fallback": image_fb,
     } for r in hot_rows if allow_store(r[0])]
 
 
