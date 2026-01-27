@@ -45,7 +45,6 @@ scheduler = AsyncIOScheduler()
 _scheduler_started = False
 
 
-
 # --------------------
 # DB helpers
 # --------------------
