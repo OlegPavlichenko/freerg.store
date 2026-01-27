@@ -269,6 +269,37 @@ def steam_header_image_from_url_fast(url: str) -> str | None:
         return None
     return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
 
+def resolve_steam_app_id(url: str) -> str | None:
+    """
+    Добывает appid:
+    1) быстро из URL
+    2) если не получилось — ОДИН раз делает requests с редиректами
+       (использовать только в update job, НЕ в рендере)
+    """
+    app_id = extract_steam_app_id_fast(url)
+    if app_id:
+        return app_id
+
+    try:
+        resp = requests.get(url, timeout=10, allow_redirects=True, headers={"User-Agent":"Mozilla/5.0"})
+        final_url = str(resp.url)
+        return extract_steam_app_id_fast(final_url)
+    except Exception:
+        return None
+    
+def resolve_steam_app_id_limited(url: str, allow_slow: bool = True) -> str | None:
+    app_id = extract_steam_app_id_fast(url)
+    if app_id:
+        return app_id
+    if not allow_slow:
+        return None
+    try:
+        resp = requests.get(url, timeout=10, allow_redirects=True, headers={"User-Agent":"Mozilla/5.0"})
+        return extract_steam_app_id_fast(str(resp.url))
+    except Exception:
+        return None
+
+
 
 def steam_header_image_from_url(url: str) -> str | None:
     app_id = extract_steam_app_id(url)
@@ -420,7 +451,7 @@ def fetch_itad_steam():
     data = r.json()
 
     items = data if isinstance(data, list) else (data.get("list") or data.get("data") or data.get("items") or data.get("result") or [])
-
+    resolved_slow = 0
     out = []
     for it in items:
         if not isinstance(it, dict):
@@ -446,7 +477,16 @@ def fetch_itad_steam():
         app_id = ""
         m = re.search(r"/app/(\d+)", url)
         if m:
-            app_id = m.group(1)
+          # лимит "дорогих" редиректов, чтобы update не тормозил
+# объяви resolved_slow=0 выше цикла (один раз)
+          allow_slow = False
+        app_id = extract_steam_app_id_fast(url)
+        if not app_id and resolved_slow < 20:
+         allow_slow = True
+         resolved_slow += 1
+         app_id = resolve_steam_app_id_limited(url, allow_slow=True) or ""
+        else:
+         app_id = app_id or ""
 
         image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
 
@@ -482,7 +522,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 
     data = r.json()
 
     items = data if isinstance(data, list) else (data.get("list") or data.get("data") or data.get("items") or data.get("result") or [])
-
+    resolved_slow = 0
     out = []
     for it in items:
         if not isinstance(it, dict):
@@ -515,9 +555,14 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 
         app_id = ""
         m = re.search(r"/app/(\d+)", url)
         if m:
-            app_id = m.group(1)
+            app_id = extract_steam_app_id_fast(url)
+            if not app_id and resolved_slow < 15:
+             resolved_slow += 1
+            app_id = resolve_steam_app_id_limited(url, allow_slow=True) or ""
+        else:
+           app_id = app_id or ""
 
-        image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
+           image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
 
         out.append({
             "store": "steam",
@@ -1430,7 +1475,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         FROM deals
         WHERE kind='hot_deal'
         ORDER BY RANDOM()
-        LIMIT 40
+        LIMIT 15
     """).fetchall()
 
     free_games_rows = conn.execute("""
