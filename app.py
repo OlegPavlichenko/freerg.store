@@ -255,6 +255,9 @@ def cleanup_expired(keep_days: int = 7) -> int:
 # Steam image helpers
 # --------------------
 def extract_steam_app_id_fast(url: str) -> str | None:
+    """Извлекает app_id из URL Steam без HTTP-запросов"""
+    if not url:
+        return None
     m = re.search(r"store\.steampowered\.com/app/(\d+)", url)
     if m:
         return m.group(1)
@@ -270,6 +273,7 @@ def steam_header_image_from_url_fast(url: str) -> str | None:
     return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
 
 def steam_header_candidates(app_id: str) -> list[str]:
+    """Возвращает список URL-ов обложек Steam в порядке приоритета"""
     if not app_id:
         return []
     return [
@@ -333,8 +337,6 @@ def steam_best_header_from_url(url: str) -> str | None:
         return None
     return steam_header_candidates(app_id)[0]  # первый как основной
 
-import re
-
 def steam_header_cdn_from_url(url: str) -> str | None:
     """
     Быстро строит ссылку на обложку Steam по appid из URL:
@@ -357,7 +359,6 @@ def fetch_prime_blog():
     """
     Берём последние статьи Prime Gaming Blog по тегу "free-games-with-prime"
     и добавляем как записи (дайджест).
-    Источник: primegaming.blog/tagged/free-games-with-prime :contentReference[oaicite:4]{index=4}
     """
     url = "https://primegaming.blog/tagged/free-games-with-prime"
     r = requests.get(url, timeout=25, headers={"User-Agent": "Mozilla/5.0"})
@@ -398,7 +399,7 @@ def fetch_prime_blog():
 def fetch_itad_gog():
     """
     GOG freebies через ITAD deals/v2.
-    shop id GOG у ITAD = 35. :contentReference[oaicite:2]{index=2}
+    shop id GOG у ITAD = 35.
     """
     if not ITAD_API_KEY:
         return []
@@ -548,7 +549,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
     Steam hot deals через ITAD deals/v2.
     - Пытаемся набрать keep штук с порогом скидки min_cut (по умолчанию 70%).
     - Если набралось мало — автоматически пробуем 60%, затем 50%.
-    - До 15 ссылок прогоняем через редиректы, чтобы добыть appid и обложку.
+    - Увеличен лимит редиректов до 40 для лучшего покрытия обложек.
     """
     if not ITAD_API_KEY:
         return []
@@ -579,7 +580,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
     out: list[dict] = []
     seen_urls = set()
 
-    slow_left = 15  # лимит "дорогих" редиректов за один запуск
+    slow_left = 40  # ⭐ увеличен лимит для лучшего покрытия
 
     def add_item(it: dict, deal: dict, cut: int, url: str) -> None:
         nonlocal slow_left, out, seen_urls
@@ -596,16 +597,27 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
         regular_obj = deal.get("regular") or deal.get("regularPrice") or deal.get("regular_price") or {}
         old_amount = regular_obj.get("amount") if isinstance(regular_obj, dict) else None
 
-        # appid: быстрый парсинг
+        # appid: сначала быстрый парсинг
         app_id = extract_steam_app_id_fast(url)
 
-        # если не нашли — пробуем редиректами, но ограниченно
+        # если не нашли — пробуем редиректами
         if not app_id and slow_left > 0:
             slow_left -= 1
-            app_id = resolve_steam_app_id_slow(url)
+            try:
+                app_id = resolve_steam_app_id_slow(url)
+            except Exception:
+                pass
+
+        # ⭐ дополнительная попытка: извлечь из deal.id, если это число
+        if not app_id:
+            deal_id_field = deal.get("id") or it.get("id") or ""
+            if isinstance(deal_id_field, str) and deal_id_field.isdigit():
+                app_id = deal_id_field
 
         app_id = app_id or ""
-        cands = steam_header_candidates(app_id)
+        
+        # формируем картинку
+        cands = steam_header_candidates(app_id) if app_id else []
         image_url = cands[1] if len(cands) > 1 else (cands[0] if cands else None)
 
         out.append({
@@ -614,7 +626,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
             "kind": "hot_deal",
             "title": title,
             "url": url,
-            "image_url": image_url,
+            "image_url": image_url,  # ⭐ сохраняем в БД
             "source": "itad",
             "starts_at": start,
             "ends_at": expiry,
@@ -1581,21 +1593,23 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         return (row_store or "").strip().lower() == store
 
     def images_for_row(row_store: str | None, url: str, image_url: str | None):
+        """⭐ Улучшенная логика: сначала используем image_url из БД"""
         st = (row_store or "").strip().lower()
+        
+        # Если в БД уже есть картинка — используем её
         if image_url:
-            return image_url, ""  # есть готовая обложка
-        if st != "steam":
-            return "", ""
-
-        appid = extract_steam_app_id_fast(url)
-        if not appid:
-            return "", ""
-
-        cands = steam_header_candidates(appid)
-        # основной — akamai (обычно лучше), fallback — cloudflare/fastly
-        main = cands[1] if len(cands) > 1 else (cands[0] if cands else "")
-        fb = cands[2] if len(cands) > 2 else (cands[0] if cands else "")
-        return main, fb
+            return image_url, ""
+        
+        # Для Steam пробуем сгенерировать
+        if st == "steam":
+            appid = extract_steam_app_id_fast(url)
+            if appid:
+                cands = steam_header_candidates(appid)
+                main = cands[1] if len(cands) > 1 else (cands[0] if cands else "")
+                fb = cands[2] if len(cands) > 2 else (cands[0] if cands else "")
+                return main, fb
+        
+        return "", ""
 
     # keep
     keep = []
@@ -1870,4 +1884,3 @@ async def on_shutdown():
             scheduler.shutdown(wait=False)
     except Exception:
         pass
-
