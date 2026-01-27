@@ -43,7 +43,7 @@ bot = Bot(token=TG_BOT_TOKEN) if TG_BOT_TOKEN else None
 
 scheduler = AsyncIOScheduler()
 _scheduler_started = False
-
+JOB_LOCK = asyncio.Lock()
 
 # --------------------
 # DB helpers
@@ -404,17 +404,13 @@ def fetch_itad_gog():
 # SOURCES: ITAD (Steam)
 # --------------------
 def fetch_itad_steam():
-    """
-    Steam freebies через ITAD deals/v2.
-    Фильтр: cut==100 или price.amount==0.
-    """
     if not ITAD_API_KEY:
         return []
 
     endpoint = "https://api.isthereanydeal.com/deals/v2"
     params = {
         "key": ITAD_API_KEY,
-        "shops": "61",     # Steam shop id у ITAD
+        "shops": "61",     # Steam
         "limit": "200",
         "sort": "-cut",
     }
@@ -423,10 +419,7 @@ def fetch_itad_steam():
     r.raise_for_status()
     data = r.json()
 
-    if isinstance(data, list):
-        items = data
-    else:
-        items = data.get("list") or data.get("data") or data.get("items") or data.get("result") or []
+    items = data if isinstance(data, list) else (data.get("list") or data.get("data") or data.get("items") or data.get("result") or [])
 
     out = []
     for it in items:
@@ -438,6 +431,7 @@ def fetch_itad_steam():
         price_obj = deal.get("price") or {}
         price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
 
+        # free-to-keep
         if not (cut == 100 or price_amount == 0):
             continue
 
@@ -449,16 +443,16 @@ def fetch_itad_steam():
         expiry = deal.get("expiry") or it.get("expiry")
         start = deal.get("start") or it.get("start")
 
-        # external_id попробуем как app_id (если можно без редиректа)
-        app_id = None
+        app_id = ""
         m = re.search(r"/app/(\d+)", url)
         if m:
             app_id = m.group(1)
-            image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
+
+        image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
 
         out.append({
             "store": "steam",
-            "external_id": app_id or "",
+            "external_id": app_id,
             "kind": "free_to_keep",
             "title": title,
             "url": url,
@@ -470,31 +464,24 @@ def fetch_itad_steam():
 
     return out
 
-def fetch_itad_steam_hot_deals(min_cut: int = 5):
-    """
-    Steam hot deals через ITAD deals/v2.
-    Берём скидки cut >= min_cut и НЕ бесплатные (чтобы не дублировать free_to_keep).
-    """
+
+def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 60):
     if not ITAD_API_KEY:
         return []
 
     endpoint = "https://api.isthereanydeal.com/deals/v2"
     params = {
         "key": ITAD_API_KEY,
-        "shops": "61",     # Steam
-        "limit": "5",
+        "shops": "61",
+        "limit": str(limit),
         "sort": "-cut",
-        }
-    return out [60]
+    }
 
     r = requests.get(endpoint, params=params, timeout=25)
     r.raise_for_status()
     data = r.json()
 
-    if isinstance(data, list):
-        items = data
-    else:
-        items = data.get("list") or data.get("data") or data.get("items") or data.get("result") or []
+    items = data if isinstance(data, list) else (data.get("list") or data.get("data") or data.get("items") or data.get("result") or [])
 
     out = []
     for it in items:
@@ -506,9 +493,10 @@ def fetch_itad_steam_hot_deals(min_cut: int = 5):
         if cut is None or cut < min_cut:
             continue
 
-        # не берём бесплатные, чтобы не дублировать free_to_keep
         price_obj = deal.get("price") or {}
         price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
+
+        # не бесплатные
         if cut == 100 or price_amount == 0:
             continue
 
@@ -520,18 +508,16 @@ def fetch_itad_steam_hot_deals(min_cut: int = 5):
         expiry = deal.get("expiry") or it.get("expiry")
         start = deal.get("start") or it.get("start")
 
-        # пробуем достать "было/стало" (если ITAD отдаёт)
         regular_obj = deal.get("regular") or deal.get("regularPrice") or deal.get("regular_price") or {}
         old_amount = regular_obj.get("amount") if isinstance(regular_obj, dict) else None
-
         currency = price_obj.get("currency") if isinstance(price_obj, dict) else None
 
-        # external_id как app_id если есть
         app_id = ""
         m = re.search(r"/app/(\d+)", url)
         if m:
             app_id = m.group(1)
-            image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
+
+        image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
 
         out.append({
             "store": "steam",
@@ -543,15 +529,13 @@ def fetch_itad_steam_hot_deals(min_cut: int = 5):
             "source": "itad",
             "starts_at": start,
             "ends_at": expiry,
-            "discount_pct": int(cut) if cut is not None else None,
+            "discount_pct": int(cut),
             "price_old": old_amount,
             "price_new": price_amount,
             "currency": currency,
         })
 
-    return out
-
-
+    return out[:keep]
 
 # --------------------
 # SOURCES: Epic
@@ -689,26 +673,41 @@ def save_deals(deals: list[dict]):
 
     new_items = 0
     for d in deals:
-        store = d.get("store", "") or ""
-        external_id = d.get("external_id", "") or ""
-        url = d.get("url", "") or ""
+        store = d.get("store") or ""
+        external_id = d.get("external_id") or ""
+        url = d.get("url") or ""
         if not url:
             continue
 
         did = deal_id(store, external_id, url)
 
         cur = conn.execute(
-        "INSERT OR IGNORE INTO deals (id,store,external_id,kind,title,url,image_url,source,starts_at,ends_at,discount_pct,price_old,price_new,currency,posted,created_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
-        (...),
-    )
-    if cur.rowcount == 1:
-        new_items += 1
+            "INSERT OR IGNORE INTO deals (id,store,external_id,kind,title,url,image_url,source,starts_at,ends_at,discount_pct,price_old,price_new,currency,posted,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
+            (
+                did,
+                store,
+                external_id,
+                d.get("kind", ""),
+                d.get("title", ""),
+                url,
+                d.get("image_url", ""),
+                d.get("source", ""),
+                d.get("starts_at"),
+                d.get("ends_at"),
+                d.get("discount_pct"),
+                d.get("price_old"),
+                d.get("price_new"),
+                d.get("currency"),
+                now,
+            ),
+        )
+        if cur.rowcount == 1:
+            new_items += 1
 
     conn.commit()
     conn.close()
     return new_items
-
 
 async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None = None):
     """
@@ -1431,7 +1430,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         FROM deals
         WHERE kind='hot_deal'
         ORDER BY RANDOM()
-        sLIMIT 40
+        LIMIT 40
     """).fetchall()
 
     free_games_rows = conn.execute("""
