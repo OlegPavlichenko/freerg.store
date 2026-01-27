@@ -555,6 +555,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 
         app_id = ""
         m = re.search(r"/app/(\d+)", url)
         if m:
+            allow_slow = False
             app_id = extract_steam_app_id_fast(url)
             if not app_id and resolved_slow < 15:
              resolved_slow += 1
