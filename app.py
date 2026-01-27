@@ -702,30 +702,13 @@ def save_deals(deals: list[dict]):
 
         did = deal_id(store, external_id, url)
 
-        cur = conn.execute("SELECT id FROM deals WHERE id=?", (did,))
-        if cur.fetchone() is None:
-            conn.execute(
-    "INSERT INTO deals (id,store,external_id,kind,title,url,image_url,source,starts_at,ends_at,discount_pct,price_old,price_new,currency,posted,created_at) "
-    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
-    (
-        did,
-        store,
-        external_id,
-        d.get("kind", ""),
-        d.get("title", ""),
-        url,
-        d.get("image_url", ""),
-        d.get("source", ""),
-        d.get("starts_at"),
-        d.get("ends_at"),
-        d.get("discount_pct"),
-        d.get("price_old"),
-        d.get("price_new"),
-        d.get("currency"),
-        now,
-    ),
-)
-            new_items += 1
+        cur = conn.execute(
+        "INSERT OR IGNORE INTO deals (id,store,external_id,kind,title,url,image_url,source,starts_at,ends_at,discount_pct,price_old,price_new,currency,posted,created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
+        (...),
+    )
+    if cur.rowcount == 1:
+        new_items += 1
 
     conn.commit()
     conn.close()
