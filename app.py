@@ -1212,7 +1212,7 @@ button.btn{font-family: inherit}
       </div>
 
       <div class="controls">
-        {% set base = "/?show_expired=" ~ show_expired ~ "&kind=" ~ kind %}
+        {% set base = "/?show_expired=" ~ show_expired ~ "&store=" ~ store %}
                 {% set base_kind = base ~ "&store=" ~ store %}
 <div class="seg" title="Фильтр по типу раздачи">
   {% if kind == "all" %}<span class="on">Все</span>{% else %}<a href="{{ base_kind }}&kind=all">Все</a>{% endif %}
@@ -1591,7 +1591,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "price_old": r[7],
         "price_new": r[8],
         "currency": r[9],
-    } for r in hot_rows if allow_time(r[4]) and allow_store(r[0])]
+    } for r in hot_rows if allow_store(r[0])]
 
 
     keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
