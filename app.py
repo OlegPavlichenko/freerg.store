@@ -460,15 +460,22 @@ def fetch_itad_gog():
 # --------------------
 # SOURCES: ITAD (Steam)
 # --------------------
-def fetch_itad_steam():
+def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
+    """
+    Steam freebies через ITAD deals/v2.
+    Фильтр: cut==100 или price.amount==0.
+    Картинка:
+      - если appid нашли -> берём более "новый" header (akamai store_item_assets)
+      - если appid не нашли -> пробуем добыть через редирект, но не больше slow_limit раз за запуск
+    """
     if not ITAD_API_KEY:
         return []
 
     endpoint = "https://api.isthereanydeal.com/deals/v2"
     params = {
         "key": ITAD_API_KEY,
-        "shops": "61",     # Steam
-        "limit": "200",
+        "shops": "61",          # Steam
+        "limit": str(limit),
         "sort": "-cut",
     }
 
@@ -476,23 +483,33 @@ def fetch_itad_steam():
     r.raise_for_status()
     data = r.json()
 
-    items = data if isinstance(data, list) else (data.get("list") or data.get("data") or data.get("items") or data.get("result") or [])
+    items = data if isinstance(data, list) else (
+        data.get("list") or data.get("data") or data.get("items") or data.get("result") or []
+    )
+
     resolved_slow = 0
-    out = []
+    out: list[dict] = []
+
     for it in items:
         if not isinstance(it, dict):
             continue
 
         deal = it.get("deal") if isinstance(it.get("deal"), dict) else it
+
         cut = deal.get("cut")
         price_obj = deal.get("price") or {}
         price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
 
-        # free-to-keep
+        # free-to-keep: 100% или цена 0
         if not (cut == 100 or price_amount == 0):
             continue
 
-        title = it.get("title") or it.get("name") or deal.get("title") or deal.get("name") or "Steam giveaway"
+        title = (
+            it.get("title") or it.get("name")
+            or deal.get("title") or deal.get("name")
+            or "Steam giveaway"
+        )
+
         url = deal.get("url") or it.get("url")
         if not url:
             continue
@@ -500,22 +517,17 @@ def fetch_itad_steam():
         expiry = deal.get("expiry") or it.get("expiry")
         start = deal.get("start") or it.get("start")
 
-        app_id = ""
-        m = re.search(r"/app/(\d+)", url)
-        if m:
-          # лимит "дорогих" редиректов, чтобы update не тормозил
-# объяви resolved_slow=0 выше цикла (один раз)
-          allow_slow = False
-        app_id = extract_steam_app_id_fast(url)
-        if not app_id and resolved_slow < 20:
-         allow_slow = True
-         resolved_slow += 1
-         app_id = resolve_steam_app_id_limited(url, allow_slow=True) or ""
-        else:
-         app_id = app_id or ""
+        # appid: быстрый парсинг, иначе ограниченно через редиректы
+        app_id = extract_steam_app_id_fast(url) or ""
+        if not app_id and resolved_slow < slow_limit:
+            resolved_slow += 1
+            app_id = resolve_steam_app_id_limited(url, allow_slow=True) or ""
 
-        cands = steam_header_candidates(app_id)
-        image_url = cands[1] if len(cands) > 1 else (cands[0] if cands else None)
+        # картинка: предпочтительно akamai store_item_assets
+        image_url = None
+        if app_id:
+            cands = steam_header_candidates(app_id)
+            image_url = cands[1] if len(cands) > 1 else (cands[0] if cands else None)
 
         out.append({
             "store": "steam",
@@ -530,7 +542,6 @@ def fetch_itad_steam():
         })
 
     return out
-
 
 def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 30):
     """
@@ -1228,7 +1239,7 @@ button.btn{font-family: inherit}
 
       <div class="controls">
         {% set base = "/?show_expired=" ~ show_expired ~ "&store=" ~ store %}
-                {% set base_kind = base ~ "&store=" ~ store %}
+                {% set base_kind = base %}
 <div class="seg" title="Фильтр по типу раздачи">
   {% if kind == "all" %}<span class="on">Все</span>{% else %}<a href="{{ base_kind }}&kind=all">Все</a>{% endif %}
   {% if kind == "keep" %}<span class="on">🎁 Навсегда</span>{% else %}<a href="{{ base_kind }}&kind=keep">🎁 Навсегда</a>{% endif %}
@@ -1318,13 +1329,12 @@ button.btn{font-family: inherit}
           {% for d in weekend %}
           <div class="card">
             <div class="thumb">
-              {% if d["image"] %}
-                <img src="{{ d["image"] }}" alt="cover"
-     onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
-     data-fallback="{{ d.get('image_fallback','') }}"/>
-              {% else %}
-                <div class="ph">Нет обложки</div>
-              {% endif %}
+              {% if g["image_url"] %}
+  <img src="{{ g["image_url"] }}" alt="cover"/>
+{% else %}
+  <div class="ph">Нет обложки</div>
+{% endif %}
+
             </div>
             <div class="body">
               <div class="row1">
@@ -1370,14 +1380,12 @@ button.btn{font-family: inherit}
       {% for d in hot %}
       <div class="card">
         <div class="thumb">
-          {% if d["image"] %}
-            <img src="{{ d["image"] }}" alt="cover"
-     onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
-     data-fallback="{{ d.get('image_fallback','') }}"/>
+          {% if g["image_url"] %}
+  <img src="{{ g["image_url"] }}" alt="cover"/>
+{% else %}
+  <div class="ph">Нет обложки</div>
+{% endif %}
 
-          {% else %}
-            <div class="ph">Нет обложки</div>
-          {% endif %}
         </div>
         <div class="body">
           <div class="row1">
