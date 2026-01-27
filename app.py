@@ -454,6 +454,7 @@ def fetch_itad_steam():
         m = re.search(r"/app/(\d+)", url)
         if m:
             app_id = m.group(1)
+            image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
 
         out.append({
             "store": "steam",
@@ -461,7 +462,7 @@ def fetch_itad_steam():
             "kind": "free_to_keep",
             "title": title,
             "url": url,
-            "image_url": None,
+            "image_url": image_url,
             "source": "itad",
             "starts_at": start,
             "ends_at": expiry,
@@ -484,8 +485,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 5):
         "limit": "5",
         "sort": "-cut",
         }
-    return out[:60]
-
+    
     r = requests.get(endpoint, params=params, timeout=25)
     r.raise_for_status()
     data = r.json()
@@ -530,6 +530,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 5):
         m = re.search(r"/app/(\d+)", url)
         if m:
             app_id = m.group(1)
+            image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
 
         out.append({
             "store": "steam",
@@ -537,7 +538,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 5):
             "kind": "hot_deal",
             "title": title,
             "url": url,
-            "image_url": None,
+            "image_url": image_url,
             "source": "itad",
             "starts_at": start,
             "ends_at": expiry,
@@ -547,7 +548,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 5):
             "currency": currency,
         })
 
-    return out
+    return out [60]
 
 
 
@@ -1428,8 +1429,8 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         SELECT store,title,url,image_url,ends_at,created_at,discount_pct,price_old,price_new,currency
         FROM deals
         WHERE kind='hot_deal'
-        ORDER BY created_at DESC
-        LIMIT 100
+        ORDER BY RANDOM()
+        sLIMIT 40
     """).fetchall()
 
     free_games_rows = conn.execute("""
@@ -1458,7 +1459,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "store_badge": store_badge(r[0]),
         "title": r[1],
         "url": r[2],
-        "image": (r[3] or "") or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
+        "image" : r[3] or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
         "ends_at": r[4],
         "is_new": is_new(r[5]),
         "ends_at_fmt": format_expiry(r[4]),
@@ -1472,7 +1473,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "store_badge": store_badge(r[0]),
         "title": r[1],
         "url": r[2],
-        "image": (r[3] or "") or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
+        "image" : r[3] or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
         "ends_at": r[4],
         "is_new": is_new(r[5]),
         "ends_at_fmt": format_expiry(r[4]),
@@ -1487,7 +1488,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         "store_badge": store_badge(r[0]),
         "title": r[1],
         "url": r[2],
-        "image": (r[3] or "") or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
+        "image" : r[3] or (steam_header_image_from_url_fast(r[2]) if (r[0] or "").lower() == "steam" else ""),
         "ends_at": r[4],
         "is_new": is_new(r[5]),
         "ends_at_fmt": format_expiry(r[4]),
