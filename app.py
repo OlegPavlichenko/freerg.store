@@ -515,51 +515,73 @@ def fetch_itad_steam():
     return out
 
 
-def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 30):
+def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 30):
+    """
+    Steam hot deals через ITAD deals/v2.
+    - Пытаемся набрать keep штук с порогом скидки min_cut (по умолчанию 70%).
+    - Если набралось мало — автоматически пробуем 60%, затем 50%.
+    - До 15 ссылок прогоняем через редиректы, чтобы добыть appid и обложку.
+    """
     if not ITAD_API_KEY:
         return []
 
     endpoint = "https://api.isthereanydeal.com/deals/v2"
-    params = {"key": ITAD_API_KEY, "shops": "61", "limit": str(limit), "sort": "-cut"}
+    params = {
+        "key": ITAD_API_KEY,
+        "shops": "61",          # Steam
+        "limit": str(limit),    # сколько тянуть из API
+        "sort": "-cut",
+    }
 
     r = requests.get(endpoint, params=params, timeout=25)
     r.raise_for_status()
     data = r.json()
-    items = data if isinstance(data, list) else (data.get("list") or data.get("data") or data.get("items") or data.get("result") or [])
-    slow_left = 15
-    out = []
-    for it in items:
-        if not isinstance(it, dict):
-            continue
-        deal = it.get("deal") if isinstance(it.get("deal"), dict) else it
 
-        cut = deal.get("cut")
-        if cut is None or cut < min_cut:
-            continue
+    items = data if isinstance(data, list) else (
+        data.get("list") or data.get("data") or data.get("items") or data.get("result") or []
+    )
 
-        price_obj = deal.get("price") or {}
-        price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
-        if cut == 100 or price_amount == 0:
-            continue
+    # Пороги: сначала 70, если мало — 60, потом 50
+    thresholds = [min_cut]
+    if min_cut > 60:
+        thresholds.append(60)
+    if min_cut > 50:
+        thresholds.append(50)
+
+    out: list[dict] = []
+    seen_urls = set()
+
+    slow_left = 15  # лимит "дорогих" редиректов за один запуск
+
+    def add_item(it: dict, deal: dict, cut: int, url: str) -> None:
+        nonlocal slow_left, out, seen_urls
 
         title = it.get("title") or it.get("name") or deal.get("title") or deal.get("name") or "Steam deal"
-        url = deal.get("url") or it.get("url")
-        if not url:
-            continue
 
         expiry = deal.get("expiry") or it.get("expiry")
         start = deal.get("start") or it.get("start")
 
-        regular_obj = deal.get("regular") or deal.get("regularPrice") or deal.get("regular_price") or {}
-        old_amount = regular_obj.get("amount") if isinstance(regular_obj, dict) else None
+        price_obj = deal.get("price") or {}
+        price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
         currency = price_obj.get("currency") if isinstance(price_obj, dict) else None
 
+        regular_obj = deal.get("regular") or deal.get("regularPrice") or deal.get("regular_price") or {}
+        old_amount = regular_obj.get("amount") if isinstance(regular_obj, dict) else None
+
+        # appid: быстрый парсинг
         app_id = extract_steam_app_id_fast(url)
+
+        # если не нашли — пробуем редиректами, но ограниченно
         if not app_id and slow_left > 0:
-         slow_left -= 1
-         app_id = resolve_steam_app_id_slow(url)
-         app_id = app_id or ""
-        image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg" if app_id else None
+            slow_left -= 1
+            app_id = resolve_steam_app_id_slow(url)
+
+        app_id = app_id or ""
+        image_url = (
+            f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
+            if app_id else None
+        )
+
         out.append({
             "store": "steam",
             "external_id": app_id,
@@ -575,9 +597,37 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 120, keep: int = 
             "price_new": price_amount,
             "currency": currency,
         })
+        seen_urls.add(url)
 
-    return out[:keep]
+    # Проходим по порогам, пока не наберём keep
+    for thr in thresholds:
+        for it in items:
+            if len(out) >= keep:
+                break
+            if not isinstance(it, dict):
+                continue
 
+            deal = it.get("deal") if isinstance(it.get("deal"), dict) else it
+            cut = deal.get("cut")
+            if cut is None or cut < thr:
+                continue
+
+            # не берём бесплатные, чтобы не дублировать free_to_keep
+            price_obj = deal.get("price") or {}
+            price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
+            if cut == 100 or price_amount == 0:
+                continue
+
+            url = deal.get("url") or it.get("url")
+            if not url or url in seen_urls:
+                continue
+
+            add_item(it, deal, int(cut), url)
+
+        if len(out) >= keep:
+            break
+
+    return out
 
 # --------------------
 # SOURCES: Epic
