@@ -1286,548 +1286,548 @@ PAGE = Template("""
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23111827'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='%23667eea'>🎮</text></svg>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-    :root {
-        /* Игровая палитра */
-        --bg-primary: #0a0e1a;
-        --bg-secondary: #111827;
-        --bg-card: #1a1f36;
-        --bg-hover: #252a44;
+        :root {
+            /* Игровая палитра */
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a1f36;
+            --bg-hover: #252a44;
+            
+            /* Акцентные цвета */
+            --accent-steam: #1b2838;
+            --accent-epic: #2a2a2a;
+            --accent-gog: #863a8a;
+            --accent-prime: #ff9900;
+            
+            /* Текст */
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            /* Статусы */
+            --status-new: #10b981;
+            --status-expiring: #f59e0b;
+            --status-expired: #ef4444;
+            --status-free: #3b82f6;
+            
+            /* Градиенты */
+            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-steam: linear-gradient(135deg, #1b2838 0%, #2a475e 100%);
+            --gradient-epic: linear-gradient(135deg, #2a2a2a 0%, #121212 100%);
+            
+            /* Тени */
+            --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            --shadow-hover: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+            
+            /* Скругления */
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+            
+            /* Анимации */
+            --transition: all 0.3s ease;
+        }
         
-        /* Акцентные цвета */
-        --accent-steam: #1b2838;
-        --accent-epic: #2a2a2a;
-        --accent-gog: #863a8a;
-        --accent-prime: #ff9900;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
         
-        /* Текст */
-        --text-primary: #e2e8f0;
-        --text-secondary: #94a3b8;
-        --text-muted: #64748b;
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(100, 126, 234, 0.1) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(118, 75, 162, 0.1) 0%, transparent 20%);
+        }
         
-        /* Статусы */
-        --status-new: #10b981;
-        --status-expiring: #f59e0b;
-        --status-expired: #ef4444;
-        --status-free: #3b82f6;
-        
-        /* Градиенты */
-        --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        --gradient-steam: linear-gradient(135deg, #1b2838 0%, #2a475e 100%);
-        --gradient-epic: linear-gradient(135deg, #2a2a2a 0%, #121212 100%);
-        
-        /* Тени */
-        --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-        --shadow-hover: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
-        
-        /* Скругления */
-        --radius-sm: 8px;
-        --radius-md: 12px;
-        --radius-lg: 16px;
-        --radius-xl: 24px;
-        
-        /* Анимации */
-        --transition: all 0.3s ease;
-    }
-    
-    * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-    }
-    
-    body {
-        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        line-height: 1.6;
-        min-height: 100vh;
-        background-image: 
-            radial-gradient(circle at 10% 20%, rgba(100, 126, 234, 0.1) 0%, transparent 20%),
-            radial-gradient(circle at 90% 80%, rgba(118, 75, 162, 0.1) 0%, transparent 20%);
-    }
-    
-    /* Контейнер */
-    .container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 0 16px;
-    }
-    
-    /* Хедер */
-    .header {
-        padding: 24px 0;
-        margin-bottom: 32px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(10, 14, 26, 0.9);
-        backdrop-filter: blur(10px);
-        position: sticky;
-        top: 0;
-        z-index: 100;
-    }
-    
-    .brand {
-        text-align: center;
-        margin-bottom: 24px;
-    }
-    
-    .brand h1 {
-        font-size: 2.5rem;
-        font-weight: 800;
-        background: var(--gradient-primary);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin-bottom: 8px;
-        letter-spacing: -0.5px;
-    }
-    
-    .brand p {
-        color: var(--text-secondary);
-        font-size: 1rem;
-        max-width: 600px;
-        margin: 0 auto;
-    }
-    
-    /* Статистика */
-    .stats {
-        display: flex;
-        gap: 16px;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-bottom: 24px;
-    }
-    
-    .stat-item {
-        background: var(--bg-card);
-        padding: 12px 20px;
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        transition: var(--transition);
-    }
-    
-    .stat-item:hover {
-        transform: translateY(-2px);
-        border-color: rgba(255, 255, 255, 0.2);
-    }
-    
-    .stat-value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--text-primary);
-    }
-    
-    .stat-label {
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-    }
-    
-    /* Фильтры */
-    .filters {
-        display: flex;
-        gap: 12px;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-bottom: 32px;
-    }
-    
-    .filter-group {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-    
-    .filter-btn {
-        padding: 10px 20px;
-        border-radius: var(--radius-md);
-        border: 2px solid transparent;
-        background: var(--bg-card);
-        color: var(--text-secondary);
-        font-weight: 600;
-        cursor: pointer;
-        transition: var(--transition);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 0.95rem;
-    }
-    
-    .filter-btn:hover {
-        background: var(--bg-hover);
-        color: var(--text-primary);
-        transform: translateY(-1px);
-    }
-    
-    .filter-btn.active {
-        background: var(--gradient-primary);
-        color: white;
-        border-color: rgba(255, 255, 255, 0.2);
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
-    
-    /* Карточки игр */
-    .games-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 24px;
-        margin-bottom: 48px;
-    }
-    
-    .game-card {
-        background: var(--bg-card);
-        border-radius: var(--radius-lg);
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        transition: var(--transition);
-        position: relative;
-    }
-    
-    .game-card:hover {
-        transform: translateY(-8px);
-        border-color: rgba(255, 255, 255, 0.2);
-        box-shadow: var(--shadow-hover);
-    }
-    
-    /* Бейдж магазина */
-    .store-badge {
-        position: absolute;
-        top: 16px;
-        left: 16px;
-        padding: 6px 12px;
-        border-radius: var(--radius-sm);
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        z-index: 2;
-    }
-    
-    .store-steam { background: var(--accent-steam); color: white; }
-    .store-epic { background: var(--accent-epic); color: white; }
-    .store-gog { background: var(--accent-gog); color: white; }
-    .store-prime { background: var(--accent-prime); color: #000; }
-    
-    /* Изображение */
-    .game-image {
-        width: 100%;
-        height: 180px;
-        object-fit: cover;
-        display: block;
-        transition: var(--transition);
-    }
-    
-    .game-card:hover .game-image {
-        transform: scale(1.05);
-    }
-    
-    .image-placeholder {
-        width: 100%;
-        height: 180px;
-        background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-    }
-    
-    /* Контент карточки */
-    .game-content {
-        padding: 20px;
-    }
-    
-    .game-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        margin-bottom: 12px;
-        line-height: 1.4;
-        color: var(--text-primary);
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-    
-    /* Мета информация */
-    .game-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 16px;
-    }
-    
-    .meta-tag {
-        padding: 4px 10px;
-        border-radius: var(--radius-sm);
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-    }
-    
-    .tag-new { background: rgba(16, 185, 129, 0.2); color: var(--status-new); }
-    .tag-free { background: rgba(59, 130, 246, 0.2); color: var(--status-free); }
-    .tag-expiring { background: rgba(245, 158, 11, 0.2); color: var(--status-expiring); }
-    .tag-expired { background: rgba(239, 68, 68, 0.2); color: var(--status-expired); }
-    
-    /* Таймер */
-    .game-timer {
-        background: rgba(255, 255, 255, 0.05);
-        padding: 10px;
-        border-radius: var(--radius-md);
-        margin-bottom: 16px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    .timer-icon {
-        color: var(--status-expiring);
-        font-size: 1.2rem;
-    }
-    
-    .timer-text {
-        font-size: 0.9rem;
-        color: var(--text-secondary);
-    }
-    
-    .timer-time {
-        font-weight: 700;
-        color: var(--text-primary);
-        margin-left: auto;
-    }
-    
-    /* Кнопки */
-    .game-actions {
-        display: flex;
-        gap: 10px;
-    }
-    
-    .btn {
-        padding: 10px 20px;
-        border-radius: var(--radius-md);
-        border: none;
-        font-weight: 600;
-        cursor: pointer;
-        transition: var(--transition);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        flex: 1;
-        font-size: 0.9rem;
-    }
-    
-    .btn-primary {
-        background: var(--gradient-primary);
-        color: white;
-    }
-    
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-    }
-    
-    .btn-secondary {
-        background: var(--bg-hover);
-        color: var(--text-primary);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.1);
-        transform: translateY(-2px);
-    }
-    
-    /* Секции */
-    .section {
-        margin-bottom: 48px;
-    }
-    
-    .section-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 24px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .section-icon {
-        font-size: 1.5rem;
-    }
-    
-    .section-title {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--text-primary);
-    }
-    
-    .section-count {
-        background: var(--gradient-primary);
-        color: white;
-        padding: 4px 12px;
-        border-radius: var(--radius-sm);
-        font-size: 0.875rem;
-        font-weight: 700;
-    }
-    
-    /* Адаптивность */
-    @media (max-width: 768px) {
+        /* Контейнер */
         .container {
-            padding: 0 12px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 16px;
+        }
+        
+        /* Хедер */
+        .header {
+            padding: 24px 0;
+            margin-bottom: 32px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(10, 14, 26, 0.9);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .brand {
+            text-align: center;
+            margin-bottom: 24px;
         }
         
         .brand h1 {
-            font-size: 2rem;
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
         }
         
-        .games-grid {
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 16px;
+        .brand p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            max-width: 600px;
+            margin: 0 auto;
         }
         
-        .game-content {
-            padding: 16px;
-        }
-        
-        .filters {
-            gap: 8px;
-        }
-        
-        .filter-btn {
-            padding: 8px 16px;
-            font-size: 0.875rem;
-        }
-        
+        /* Статистика */
         .stats {
-            gap: 8px;
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
         }
         
         .stat-item {
-            padding: 10px 16px;
+            background: var(--bg-card);
+            padding: 12px 20px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: var(--transition);
         }
         
-        .section-title {
-            font-size: 1.25rem;
-        }
-    }
-    
-    @media (max-width: 480px) {
-        .games-grid {
-            grid-template-columns: 1fr;
+        .stat-item:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.2);
         }
         
-        .brand h1 {
-            font-size: 1.75rem;
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Фильтры */
+        .filters {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 32px;
         }
         
         .filter-group {
-            width: 100%;
-        }
-        
-        .filter-btn {
-            flex: 1;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
             justify-content: center;
         }
         
+        .filter-btn {
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            border: 2px solid transparent;
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+        
+        .filter-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+        
+        .filter-btn.active {
+            background: var(--gradient-primary);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        /* Карточки игр */
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+        
+        .game-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: var(--transition);
+            position: relative;
+        }
+        
+        .game-card:hover {
+            transform: translateY(-8px);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        /* Бейдж магазина */
+        .store-badge {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            z-index: 2;
+        }
+        
+        .store-steam { background: var(--accent-steam); color: white; }
+        .store-epic { background: var(--accent-epic); color: white; }
+        .store-gog { background: var(--accent-gog); color: white; }
+        .store-prime { background: var(--accent-prime); color: #000; }
+        
+        /* Изображение */
+        .game-image {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            display: block;
+            transition: var(--transition);
+        }
+        
+        .game-card:hover .game-image {
+            transform: scale(1.05);
+        }
+        
+        .image-placeholder {
+            width: 100%;
+            height: 180px;
+            background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        /* Контент карточки */
+        .game-content {
+            padding: 20px;
+        }
+        
+        .game-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            line-height: 1.4;
+            color: var(--text-primary);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* Мета информация */
+        .game-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .meta-tag {
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .tag-new { background: rgba(16, 185, 129, 0.2); color: var(--status-new); }
+        .tag-free { background: rgba(59, 130, 246, 0.2); color: var(--status-free); }
+        .tag-expiring { background: rgba(245, 158, 11, 0.2); color: var(--status-expiring); }
+        .tag-expired { background: rgba(239, 68, 68, 0.2); color: var(--status-expired); }
+        
+        /* Таймер */
+        .game-timer {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .timer-icon {
+            color: var(--status-expiring);
+            font-size: 1.2rem;
+        }
+        
+        .timer-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        
+        .timer-time {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-left: auto;
+        }
+        
+        /* Кнопки */
         .game-actions {
-            flex-direction: column;
+            display: flex;
+            gap: 10px;
         }
         
         .btn {
-            width: 100%;
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex: 1;
+            font-size: 0.9rem;
         }
-    }
-    
-    /* Пустой стейт */
-    .empty-state {
-        text-align: center;
-        padding: 48px 24px;
-        background: var(--bg-card);
-        border-radius: var(--radius-lg);
-        border: 2px dashed rgba(255, 255, 255, 0.1);
-    }
-    
-    .empty-icon {
-        font-size: 3rem;
-        margin-bottom: 16px;
-        opacity: 0.5;
-    }
-    
-    .empty-title {
-        font-size: 1.25rem;
-        color: var(--text-primary);
-        margin-bottom: 8px;
-    }
-    
-    .empty-description {
-        color: var(--text-secondary);
-        max-width: 400px;
-        margin: 0 auto;
-    }
-    
-    /* Футер */
-    .footer {
-        text-align: center;
-        padding: 32px 0;
-        margin-top: 48px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        color: var(--text-secondary);
-        font-size: 0.875rem;
-    }
-    
-    /* Анимации */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .game-card {
-        animation: fadeIn 0.5s ease-out;
-    }
-    
-    /* Уведомления */
-    .toast {
-        position: fixed;
-        bottom: 24px;
-        left: 50%;
-        transform: translateX(-50%) translateY(100px);
-        background: var(--bg-card);
-        color: var(--text-primary);
-        padding: 12px 24px;
-        border-radius: var(--radius-md);
-        box-shadow: var(--shadow-card);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        z-index: 1000;
-        transition: transform 0.3s ease;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        max-width: 90%;
-    }
-    
-    .toast.show {
-        transform: translateX(-50%) translateY(0);
-    }
-    
-    /* Скелетоны для загрузки */
-    .skeleton {
-        background: linear-gradient(90deg, #2d3748 25%, #4a5568 50%, #2d3748 75%);
-        background-size: 200% 100%;
-        animation: loading 1.5s infinite;
-        border-radius: var(--radius-md);
-    }
-    
-    @keyframes loading {
-        0% { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
-    }
-</style>
+        
+        .btn-primary {
+            background: var(--gradient-primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        /* Секции */
+        .section {
+            margin-bottom: 48px;
+        }
+        
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .section-icon {
+            font-size: 1.5rem;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .section-count {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 700;
+        }
+        
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 12px;
+            }
+            
+            .brand h1 {
+                font-size: 2rem;
+            }
+            
+            .games-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                gap: 16px;
+            }
+            
+            .game-content {
+                padding: 16px;
+            }
+            
+            .filters {
+                gap: 8px;
+            }
+            
+            .filter-btn {
+                padding: 8px 16px;
+                font-size: 0.875rem;
+            }
+            
+            .stats {
+                gap: 8px;
+            }
+            
+            .stat-item {
+                padding: 10px 16px;
+            }
+            
+            .section-title {
+                font-size: 1.25rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .games-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .brand h1 {
+                font-size: 1.75rem;
+            }
+            
+            .filter-group {
+                width: 100%;
+            }
+            
+            .filter-btn {
+                flex: 1;
+                justify-content: center;
+            }
+            
+            .game-actions {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+        
+        /* Пустой стейт */
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+        }
+        
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        .empty-title {
+            font-size: 1.25rem;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+        
+        .empty-description {
+            color: var(--text-secondary);
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        
+        /* Футер */
+        .footer {
+            text-align: center;
+            padding: 32px 0;
+            margin-top: 48px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        /* Анимации */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .game-card {
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        /* Уведомления */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            max-width: 90%;
+        }
+        
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+        
+        /* Скелетоны для загрузки */
+        .skeleton {
+            background: linear-gradient(90deg, #2d3748 25%, #4a5568 50%, #2d3748 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: var(--radius-md);
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
 </head>
 <body>
     <div class="header">
@@ -2151,8 +2151,58 @@ PAGE = Template("""
         {% if (keep|length == 0 and weekend|length == 0 and hot|length == 0) %}
         <div class="empty-state">
             <div class="empty-icon">🎮</div>
-            <div class="empty-title">Игры не найдены</div>
-            <div class="empty-description
+            <h2 class="empty-title">Игры не найдены</h2>
+            <p class="empty-description">Попробуйте изменить фильтры или проверьте позже.</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <footer class="footer">
+        <div class="container">
+            <p>🎮 Free Game Deals • Автоматический сборник бесплатных игр</p>
+            <p>Обновляется каждые {{ steam_min }} минут • Последнее обновление: {{ last_update }}</p>
+        </div>
+    </footer>
+
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toast-message">Ссылка скопирована!</span>
+    </div>
+
+    <script>
+        // Копирование ссылки в буфер обмена
+        document.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const url = this.getAttribute('data-url');
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast('Ссылка скопирована в буфер обмена!');
+                }).catch(err => {
+                    console.error('Ошибка копирования:', err);
+                    showToast('Не удалось скопировать ссылку');
+                });
+            });
+        });
+
+        // Показать уведомление
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            
+            toastMessage.textContent = message;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Автоматическое обновление страницы каждые 15 минут
+        setTimeout(() => {
+            window.location.reload();
+        }, 15 * 60 * 1000); // 15 минут
+    </script>
+</body>
+</html>
 """)
 
 
