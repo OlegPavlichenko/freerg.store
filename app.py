@@ -339,39 +339,98 @@ def resolve_steam_app_id_slow(url: str) -> str | None:
         return None
 
 
-def get_steam_header_with_hash(app_id: str, url: str = None) -> str | None:
+def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
     """
-    Пытается получить новый URL с хешем для игры.
-    Использует запрос к странице игры (медленно!).
-    Используй только для критически важных случаев.
+    Парсит страницу игры Steam и извлекает ВСЕ доступные изображения.
+    Возвращает словарь с разными типами изображений.
+    
+    Используй в fetch функциях, НЕ в рендере!
     """
     if not app_id:
-        return None
+        return {}
     
     try:
         page_url = url or f"https://store.steampowered.com/app/{app_id}/"
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        }
+        
         resp = requests.get(
             page_url,
-            timeout=10,
-            allow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0"}
+            headers=headers,
+            timeout=15,
+            allow_redirects=True
         )
+        
+        if resp.status_code != 200:
+            return {}
         
         html = resp.text
         
-        # Ищем новый формат с хешем
-        # Паттерн: shared.*.steamstatic.com/store_item_assets/steam/apps/{app_id}/{hash}/
-        pattern = rf'shared\.(?:fastly|akamai)\.steamstatic\.com/store_item_assets/steam/apps/{app_id}/([a-f0-9]+)/'
-        match = re.search(pattern, html)
+        result = {
+            'header': None,
+            'capsule': None,
+            'hero': None,
+            'library': None,
+            'all': []
+        }
         
-        if match:
-            hash_value = match.group(1)
-            return f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{app_id}/{hash_value}/header.jpg"
+        # Паттерны для разных типов изображений
+        patterns = {
+            # Новый формат header с хешем (ПРИОРИТЕТ!)
+            'header_new': rf'(https://shared\.[^"\'<>\s]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]+/header\.jpg)',
+            # Старый header
+            'header_old': rf'(https://cdn\.[^"\'<>\s]+?steamstatic\.com/steam/apps/{app_id}/header\.jpg)',
+            # Hero capsule (большая картинка)
+            'hero': rf'(https://[^"\'<>\s]+?steamstatic\.com/steam/apps/{app_id}/hero_capsule\.jpg)',
+            # Capsule (средняя)
+            'capsule': rf'(https://[^"\'<>\s]+?steamstatic\.com/steam/apps/{app_id}/capsule_616x353\.jpg)',
+            # Library
+            'library': rf'(https://[^"\'<>\s]+?steamstatic\.com/steam/apps/{app_id}/library_600x900\.jpg)',
+        }
         
-        return None
+        # Ищем header (новый формат в приоритете)
+        for match in re.finditer(patterns['header_new'], html):
+            result['header'] = match.group(1)
+            result['all'].append(match.group(1))
+            break
         
-    except Exception:
-        return None
+        if not result['header']:
+            for match in re.finditer(patterns['header_old'], html):
+                result['header'] = match.group(1)
+                result['all'].append(match.group(1))
+                break
+        
+        # Hero capsule
+        for match in re.finditer(patterns['hero'], html):
+            result['hero'] = match.group(1)
+            result['all'].append(match.group(1))
+            break
+        
+        # Capsule
+        for match in re.finditer(patterns['capsule'], html):
+            result['capsule'] = match.group(1)
+            result['all'].append(match.group(1))
+            break
+        
+        # Library
+        for match in re.finditer(patterns['library'], html):
+            result['library'] = match.group(1)
+            result['all'].append(match.group(1))
+            break
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error scraping Steam page for {app_id}: {e}")
+        return {}
 
 
 def steam_header_image_from_url(url: str) -> str | None:
@@ -514,9 +573,7 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
     """
     Steam freebies через ITAD deals/v2.
     Фильтр: cut==100 или price.amount==0.
-    Картинка:
-      - если appid нашли -> берём более "новый" header (akamai store_item_assets)
-      - если appid не нашли -> пробуем добыть через редирект, но не больше slow_limit раз за запуск
+    Парсим изображения прямо со страниц Steam (до 10 игр).
     """
     if not ITAD_API_KEY:
         return []
@@ -538,6 +595,7 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
     )
 
     resolved_slow = 0
+    scrape_left = 10  # парсинг страниц для изображений
     out: list[dict] = []
 
     for it in items:
@@ -573,11 +631,25 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
             resolved_slow += 1
             app_id = resolve_steam_app_id_limited(url, allow_slow=True) or ""
 
-        # картинка: предпочтительно akamai store_item_assets
+        # 🔥 Парсим изображения со страницы Steam
         image_url = None
-        if app_id:
+        if app_id and scrape_left > 0:
+            scrape_left -= 1
+            try:
+                images = get_steam_images_from_page(app_id, url)
+                image_url = (
+                    images.get('header') or 
+                    images.get('hero') or 
+                    images.get('capsule') or 
+                    images.get('library')
+                )
+            except Exception:
+                pass
+        
+        # Фоллбэк на стандартные URL
+        if not image_url and app_id:
             cands = steam_header_candidates(app_id)
-            image_url = cands[1] if len(cands) > 1 else (cands[0] if cands else None)
+            image_url = cands[0] if cands else None
 
         out.append({
             "store": "steam",
@@ -598,7 +670,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
     Steam hot deals через ITAD deals/v2.
     - Пытаемся набрать keep штук с порогом скидки min_cut (по умолчанию 70%).
     - Если набралось мало — автоматически пробуем 60%, затем 50%.
-    - Увеличен лимит редиректов до 40 для лучшего покрытия обложек.
+    - Парсим изображения прямо со страниц Steam (до 10 игр).
     """
     if not ITAD_API_KEY:
         return []
@@ -629,11 +701,11 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
     out: list[dict] = []
     seen_urls = set()
 
-    slow_left = 40  # ⭐ увеличен лимит для лучшего покрытия
-    hash_attempts = 5  # попыток получить хеш для новых игр
+    slow_left = 40  # редиректы для получения app_id
+    scrape_left = 10  # парсинг страниц для получения изображений
 
     def add_item(it: dict, deal: dict, cut: int, url: str) -> None:
-        nonlocal slow_left, hash_attempts, out, seen_urls
+        nonlocal slow_left, scrape_left, out, seen_urls
 
         title = it.get("title") or it.get("name") or deal.get("title") or deal.get("name") or "Steam deal"
 
@@ -658,7 +730,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
             except Exception:
                 pass
 
-        # ⭐ дополнительная попытка: извлечь из deal.id, если это число
+        # дополнительная попытка: извлечь из deal.id
         if not app_id:
             deal_id_field = deal.get("id") or it.get("id") or ""
             if isinstance(deal_id_field, str) and deal_id_field.isdigit():
@@ -666,22 +738,26 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
 
         app_id = app_id or ""
         
-        # формируем картинку
+        # 🔥 ГЛАВНОЕ: парсим изображения со страницы Steam
         image_url = None
-        if app_id:
+        if app_id and scrape_left > 0:
+            scrape_left -= 1
+            try:
+                images = get_steam_images_from_page(app_id, url)
+                # Приоритет: header > hero > capsule > library
+                image_url = (
+                    images.get('header') or 
+                    images.get('hero') or 
+                    images.get('capsule') or 
+                    images.get('library')
+                )
+            except Exception as e:
+                print(f"Scrape error for {app_id}: {e}")
+        
+        # Фоллбэк на стандартные URL если парсинг не сработал
+        if not image_url and app_id:
             cands = steam_header_candidates(app_id)
-            # Используем первый стабильный URL (cloudflare header)
             image_url = cands[0] if cands else None
-            
-            # Для первых нескольких игр пробуем получить URL с хешем
-            if hash_attempts > 0:
-                hash_attempts -= 1
-                try:
-                    hash_url = get_steam_header_with_hash(app_id, url)
-                    if hash_url:
-                        image_url = hash_url  # приоритет новому формату
-                except Exception:
-                    pass
 
         out.append({
             "store": "steam",
@@ -689,7 +765,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
             "kind": "hot_deal",
             "title": title,
             "url": url,
-            "image_url": image_url,  # ⭐ сохраняем в БД
+            "image_url": image_url,
             "source": "itad",
             "starts_at": start,
             "ends_at": expiry,
