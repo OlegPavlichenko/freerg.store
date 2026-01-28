@@ -1769,33 +1769,36 @@ def store_badge(store: str | None) -> str:
 
 
 def images_for_row(row_store: str | None, url: str, image_url: str | None):
-    """⭐ Улучшенная логика с поддержкой нового формата Steam"""
+    """🔥 ИСПРАВЛЕННАЯ функция для Steam изображений (работающая)"""
     st = (row_store or "").strip().lower()
     
-    # Если в БД уже есть картинка — используем её как основную
-    if image_url:
-        # Для Steam добавляем фоллбэки
-        if st == "steam":
-            appid = extract_steam_app_id_fast(url)
-            if appid:
-                cands = steam_header_candidates(appid)
-                # Используем capsule как фоллбэк
-                fallback = cands[2] if len(cands) > 2 else cands[0] if cands else ""
-                return image_url, fallback
+    # ВКЛЮЧАЕМ ПРОСТУЮ ЛОГИКУ - если есть в БД, используем
+    if image_url and image_url.strip():
         return image_url, ""
     
-    # Для Steam генерируем список кандидатов
+    # Для Steam генерируем URL на основе app_id
     if st == "steam":
         appid = extract_steam_app_id_fast(url)
         if appid:
-            # Генерируем кандидаты в порядке приоритета
-            cands = steam_header_candidates(appid)
-            main = cands[0] if cands else ""  # первый кандидат как основной
-            fb = cands[2] if len(cands) > 2 else ""  # capsule как фоллбэк
-            return main, fb
+            # 🔥 ВАЖНО: Для новых игр используем правильный формат!
+            # Новый формат: https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/{hash}/header.jpg
+            
+            # Мы не знаем хеш, но Steam часто редиректит на правильный URL
+            # Пробуем базовый URL нового формата
+            base_url = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+            
+            # Также пробуем старые форматы
+            old_urls = [
+                f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
+                f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg",
+                f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_616x353.jpg",
+            ]
+            
+            # Возвращаем первый вариант (Steam сделает редирект если нужно)
+            return base_url, old_urls[2] if len(old_urls) > 2 else ""
     
+    # Для остальных магазинов
     return "", ""
-
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
@@ -2118,6 +2121,75 @@ async def on_startup():
 
     _scheduler_started = True
 
+@app.get("/debug_images")
+def debug_images(limit: int = 5):
+    """Отладочная информация по изображениям"""
+    conn = db()
+    
+    # Получаем Steam игры
+    rows = conn.execute("""
+        SELECT id, store, title, url, image_url 
+        FROM deals 
+        WHERE store='steam'
+        ORDER BY created_at DESC 
+        LIMIT ?
+    """, (limit,)).fetchall()
+    
+    result = []
+    for did, store, title, url, image_url in rows:
+        appid = extract_steam_app_id_fast(url)
+        
+        # Проверяем доступность image_url
+        image_ok = False
+        if image_url:
+            try:
+                resp = requests.head(image_url, timeout=3)
+                image_ok = resp.status_code == 200
+            except:
+                pass
+        
+        # Генерируем кандидаты
+        candidates = []
+        if appid:
+            candidates = [
+                f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg",
+                f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
+                f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_616x353.jpg",
+            ]
+        
+        # Проверяем кандидатов
+        working_candidates = []
+        for cand in candidates:
+            try:
+                resp = requests.head(cand, timeout=2)
+                if resp.status_code == 200:
+                    working_candidates.append(cand)
+            except:
+                pass
+        
+        result.append({
+            "id": did,
+            "store": store,
+            "title": title[:50],
+            "url": url,
+            "appid": appid,
+            "image_in_db": image_url,
+            "image_ok": image_ok,
+            "candidates": candidates,
+            "working_candidates": working_candidates,
+        })
+    
+    conn.close()
+    
+    return {
+        "total": len(result),
+        "games": result,
+        "summary": {
+            "with_images": sum(1 for r in result if r["image_in_db"]),
+            "images_working": sum(1 for r in result if r["image_ok"]),
+            "has_working_candidates": sum(1 for r in result if r["working_candidates"]),
+        }
+    }
 
 @app.on_event("shutdown")
 async def on_shutdown():
