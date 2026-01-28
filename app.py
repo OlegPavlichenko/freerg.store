@@ -282,6 +282,10 @@ def steam_image_candidates(appid: str) -> list[str]:
         f"https://shared.fastly.steamstatic.com/steam/apps/{appid}/header.jpg",
     ]
 
+def steam_header_candidates(appid: str) -> list[str]:
+    # совместимость со старым кодом
+    return steam_image_candidates(appid)
+
 
 def images_for_row(row_store: str | None, url: str, image_url: str | None):
     st = (row_store or "").strip().lower()
@@ -1427,22 +1431,7 @@ button.btn{font-family: inherit}
     if(!this.dataset.try1){ this.dataset.try1=1; if(this.dataset.fallback){ this.src=this.dataset.fallback; return; } }
     if(!this.dataset.try2){ this.dataset.try2=1; if(this.dataset.fallback2){ this.src=this.dataset.fallback2; return; } }
     this.remove();">
-                <script>
-document.addEventListener("error", function(e){
-  const img = e.target;
-  if(img && img.tagName === "IMG" && img.parentElement && img.parentElement.classList.contains("thumb")){
-    // если img удалился — покажем "Нет обложки"
-    if(!img.isConnected){
-      const ph = document.createElement("div");
-      ph.className = "ph";
-      ph.textContent = "Нет обложки";
-      img.parentElement.appendChild(ph);
-    }
-  }
-}, true);
-</script>
-
-  {% else %}
+    {% else %}
     <div class="ph">Нет обложки</div>
   {% endif %}
 </div>
@@ -1569,6 +1558,20 @@ document.addEventListener("error", function(e){
   });
 })();
 </script>
+                <script>
+document.addEventListener("error", function(e){
+  const img = e.target;
+  if(img && img.tagName === "IMG" && img.parentElement && img.parentElement.classList.contains("thumb")){
+    // если img удалился — покажем "Нет обложки"
+    if(!img.isConnected){
+      const ph = document.createElement("div");
+      ph.className = "ph";
+      ph.textContent = "Нет обложки";
+      img.parentElement.appendChild(ph);
+    }
+  }
+}, true);
+</script>
 </body>
 </html>
 """)
@@ -1635,23 +1638,24 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         return (row_store or "").strip().lower() == store
 
     def images_for_row(row_store: str | None, url: str, image_url: str | None):
-        """⭐ Улучшенная логика: сначала используем image_url из БД"""
-        st = (row_store or "").strip().lower()
-        
-        # Если в БД уже есть картинка — используем её
-        if image_url:
-            return image_url, ""
-        
-        # Для Steam пробуем сгенерировать
-        if st == "steam":
-            appid = extract_steam_app_id_fast(url)
-            if appid:
-                cands = steam_header_candidates(appid)
-                main = cands[1] if len(cands) > 1 else (cands[0] if cands else "")
-                fb = cands[2] if len(cands) > 2 else (cands[0] if cands else "")
-                return main, fb
-        
-        return "", ""
+     """Всегда отдаёт 3 значения: main, fb1, fb2"""
+    st = (row_store or "").strip().lower()
+
+    # если в БД уже есть картинка — используем её
+    if image_url:
+        return image_url, "", ""
+
+    if st == "steam":
+        appid = extract_steam_app_id_fast(url)
+        if not appid:
+            return "", "", ""
+        c = steam_image_candidates(appid)  # <— ниже дам правильную функцию
+        main = c[0] if len(c) > 0 else ""
+        fb1  = c[1] if len(c) > 1 else ""
+        fb2  = c[2] if len(c) > 2 else ""
+        return main, fb1, fb2
+
+    return "", "", ""
 
     # keep
     keep = []
@@ -1666,7 +1670,6 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             "url": r[2],
             "image": img_main,
             "image_fallback": img_fb1,
-            "image_fallback2": img_fb2,
             "ends_at": r[4],
             "is_new": is_new(r[5]),
             "ends_at_fmt": format_expiry(r[4]),
@@ -1688,7 +1691,6 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             "url": r[2],
             "image": img_main,
             "image_fallback": img_fb1,
-            "image_fallback2": img_fb2,
             "ends_at": r[4],
             "is_new": is_new(r[5]),
             "ends_at_fmt": format_expiry(r[4]),
