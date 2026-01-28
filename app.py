@@ -255,16 +255,44 @@ def cleanup_expired(keep_days: int = 7) -> int:
 # Steam image helpers
 # --------------------
 def extract_steam_app_id_fast(url: str) -> str | None:
-    """Извлекает app_id из URL Steam без HTTP-запросов"""
+    """Извлекает app_id из URL Steam, включая itad.link редиректы"""
     if not url:
         return None
+    
+    # Сначала пробуем извлечь из прямого Steam URL
     m = re.search(r"store\.steampowered\.com/app/(\d+)", url)
     if m:
         return m.group(1)
+    
     m = re.search(r"/app/(\d+)", url)
     if m:
         return m.group(1)
+    
+    # 🔥 ВАЖНО: Для itad.link нам нужно сделать запрос чтобы получить конечный URL
+    # Но в функции 'fast' мы не делаем запросы, поэтому возвращаем None
     return None
+
+def get_real_steam_app_id(url: str) -> str | None:
+    """
+    Получает реальный Steam AppID, следуя по редиректам itad.link
+    """
+    if not url:
+        return None
+    
+    # Если это прямой Steam URL - извлекаем быстро
+    if "store.steampowered.com" in url:
+        return extract_steam_app_id_fast(url)
+    
+    # Если это itad.link или другой редирект - делаем запрос
+    try:
+        resp = requests.head(url, timeout=5, allow_redirects=True)
+        final_url = str(resp.url)
+        
+        # Извлекаем AppID из конечного URL
+        return extract_steam_app_id_fast(final_url)
+    except Exception as e:
+        print(f"Error getting final URL for {url}: {e}")
+        return None
 
 def steam_header_image_from_url_fast(url: str) -> str | None:
     app_id = extract_steam_app_id_fast(url)
@@ -653,8 +681,7 @@ def fetch_itad_gog():
 def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
     """
     Steam freebies через ITAD deals/v2.
-    Фильтр: cut==100 или price.amount==0.
-    Парсим изображения прямо со страниц Steam (до 10 игр).
+    Сразу получаем конечные Steam URL вместо itad.link!
     """
     if not ITAD_API_KEY:
         return []
@@ -698,22 +725,32 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
             or "Steam giveaway"
         )
 
-        url = deal.get("url") or it.get("url")
-        if not url:
+        itad_url = deal.get("url") or it.get("url")
+        if not itad_url:
             continue
+
+        # 🔥 ВАЖНО: Получаем конечный Steam URL вместо itad.link
+        steam_url = itad_url  # по умолчанию
+        try:
+            if "itad.link" in itad_url:
+                resp = requests.head(itad_url, timeout=5, allow_redirects=True)
+                steam_url = str(resp.url)
+                print(f"  🔄 Редирект: {itad_url[:50]}... -> {steam_url[:60]}...")
+        except Exception as e:
+            print(f"  ⚠️  Не удалось получить конечный URL для {itad_url}: {e}")
 
         expiry = deal.get("expiry") or it.get("expiry")
         start = deal.get("start") or it.get("start")
 
-        # appid: быстрый парсинг
-        app_id = extract_steam_app_id_fast(url) or ""
+        # appid: теперь извлекаем из конечного Steam URL
+        app_id = extract_steam_app_id_fast(steam_url) or ""
 
         # 🔥 Парсим изображения со страницы Steam
         image_url = None
         if app_id and scrape_left > 0:
             scrape_left -= 1
             try:
-                images = get_steam_images_from_page(app_id, url)
+                images = get_steam_images_from_page(app_id, steam_url)
                 image_url = (
                     images.get('header') or 
                     images.get('hero') or 
@@ -725,23 +762,19 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
         
         # Фоллбэк на стандартные URL
         if not image_url and app_id:
-            cands = steam_header_candidates(app_id)
-            # Пробуем найти работающий URL
-            for cand in cands:
-                try:
-                    resp = requests.head(cand, timeout=2)
-                    if resp.status_code == 200:
-                        image_url = cand
-                        break
-                except:
-                    continue
+            # Для новых игр (> 10 млн) используем новый формат
+            app_num = int(app_id) if app_id.isdigit() else 0
+            if app_num >= 10000000:  # Новые игры
+                image_url = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{app_id}/header.jpg"
+            else:  # Старые игры
+                image_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
 
         out.append({
             "store": "steam",
             "external_id": app_id,
             "kind": "free_to_keep",
             "title": title,
-            "url": url,
+            "url": steam_url,  # 🔥 Сохраняем конечный Steam URL, а не itad.link!
             "image_url": image_url,
             "source": "itad",
             "starts_at": start,
@@ -1769,35 +1802,72 @@ def store_badge(store: str | None) -> str:
 
 
 def images_for_row(row_store: str | None, url: str, image_url: str | None):
-    """🔥 ИСПРАВЛЕННАЯ функция для Steam изображений (работающая)"""
+    """🔥 ИСПРАВЛЕННАЯ функция для Steam изображений с поддержкой itad.link"""
     st = (row_store or "").strip().lower()
     
-    # ВКЛЮЧАЕМ ПРОСТУЮ ЛОГИКУ - если есть в БД, используем
+    # 1. Если в БД уже есть картинка И она работает - используем её
     if image_url and image_url.strip():
-        return image_url, ""
+        try:
+            # Быстрая проверка доступности
+            resp = requests.head(image_url, timeout=2, allow_redirects=True)
+            if resp.status_code == 200:
+                return image_url, ""
+        except:
+            pass  # Если не работает, будем генерировать новую
     
-    # Для Steam генерируем URL на основе app_id
+    # 2. Для Steam
     if st == "steam":
+        # 🔥 ВАЖНО: Пробуем получить AppID разными способами
+        appid = None
+        
+        # Способ 1: Из URL (если это прямой Steam URL)
         appid = extract_steam_app_id_fast(url)
+        
+        # Способ 2: Из image_url если есть (там уже есть AppID!)
+        if not appid and image_url:
+            # Извлекаем AppID из image_url который уже в БД
+            # Пример: https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3764420/header.jpg
+            m = re.search(r'/apps/(\d+)/', image_url)
+            if m:
+                appid = m.group(1)
+        
         if appid:
-            # 🔥 ВАЖНО: Для новых игр используем правильный формат!
-            # Новый формат: https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/{hash}/header.jpg
+            print(f"DEBUG: Found appid={appid} for url={url[:50]}...")
             
-            # Мы не знаем хеш, но Steam часто редиректит на правильный URL
-            # Пробуем базовый URL нового формата
-            base_url = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+            # 🔥 ГЛАВНОЕ: Steam требует полный URL с хешем!
+            # Старые форматы НЕ РАБОТАЮТ для новых игр
             
-            # Также пробуем старые форматы
-            old_urls = [
-                f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
-                f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg",
-                f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_616x353.jpg",
-            ]
+            # Для игр с AppID до 10 млн (старые игры) - старый формат может работать
+            # Для новых игр (> 10 млн) - нужен новый формат с хешем
             
-            # Возвращаем первый вариант (Steam сделает редирект если нужно)
-            return base_url, old_urls[2] if len(old_urls) > 2 else ""
+            app_num = int(appid) if appid.isdigit() else 0
+            
+            if app_num < 10000000:  # Старые игры
+                candidates = [
+                    f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
+                    f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg",
+                    f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_616x353.jpg",
+                ]
+            else:  # Новые игры (нужен хеш)
+                # 🔥 Для новых игр мы не знаем хеш, но можем использовать такой URL:
+                # Steam сделает редирект на правильный URL если нужно
+                candidates = [
+                    f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg",
+                    f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg",
+                ]
+            
+            # Проверяем кандидатов
+            for candidate in candidates:
+                try:
+                    resp = requests.head(candidate, timeout=3, allow_redirects=True)
+                    if resp.status_code == 200:
+                        print(f"DEBUG: Working image: {candidate[:80]}...")
+                        return candidate, ""
+                except Exception as e:
+                    print(f"DEBUG: Failed {candidate[:50]}: {e}")
+                    continue
     
-    # Для остальных магазинов
+    # 3. Ничего не нашли
     return "", ""
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
