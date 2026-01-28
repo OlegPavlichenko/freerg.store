@@ -275,26 +275,31 @@ def steam_header_image_from_url_fast(url: str) -> str | None:
 def steam_header_candidates(app_id: str) -> list[str]:
     """
     Возвращает список URL-ов обложек Steam в порядке приоритета.
-    
-    Новые игры используют формат с хешем:
-    https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{app_id}/{hash}/header.jpg
-    
-    Но есть стабильные альтернативы без хеша, которые работают для большинства игр.
+    Включает как новый формат (с хешами), так и старый.
     """
     if not app_id:
         return []
-    return [
-        # Старые стабильные CDN (работают для ~95% игр)
+    
+    candidates = []
+    
+    # Новый формат (с хешами) - для новых игр
+    candidates.extend([
+        f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{app_id}/header.jpg",
+        f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{app_id}/header.jpg",
+        f"https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{app_id}/header.jpg",
+    ])
+    
+    # Старые CDN URL - для старых игр
+    candidates.extend([
         f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg",
         f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
-        
-        # Capsule изображения (часто работают когда header не доступен)
+        f"https://steamcdn-a.akamaihd.net/steam/apps/{app_id}/header.jpg",
         f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/capsule_616x353.jpg",
         f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/capsule_616x353.jpg",
-        
-        # Library header (другой формат, но тоже работает)
         f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/library_600x900.jpg",
-    ]
+    ])
+    
+    return candidates
 
 
 def resolve_steam_app_id(url: str) -> str | None:
@@ -330,7 +335,7 @@ def resolve_steam_app_id_limited(url: str, allow_slow: bool = True) -> str | Non
 def resolve_steam_app_id_slow(url: str) -> str | None:
     """
     Делает 1 HTTP запрос с редиректами и пытается вытащить appid из финального URL.
-    Использовать ТОЛЬКО в update job (fetch_*), НЕ в рендере страниц.
+    Использовать ТОЛЬКО в update job (fetch_*), НЕ в рендере.
     """
     try:
         resp = requests.get(url, timeout=10, allow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
@@ -341,10 +346,8 @@ def resolve_steam_app_id_slow(url: str) -> str | None:
 
 def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
     """
-    Парсит страницу игры Steam и извлекает ВСЕ доступные изображения.
-    Возвращает словарь с разными типами изображений.
-    
-    Используй в fetch функциях, НЕ в рендере!
+    УНИВЕРСАЛЬНАЯ функция для получения изображений Steam.
+    Поддерживает как новый формат (с хешами), так и старый.
     """
     if not app_id:
         return {}
@@ -353,20 +356,12 @@ def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
         page_url = url or f"https://store.steampowered.com/app/{app_id}/"
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate',
-            # 🔥 ВАЖНО: обход age gate через cookies
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Cookie': 'birthtime=0; mature_content=1; wants_mature_content=1; lastagecheckage=1-0-1990',
         }
         
-        resp = requests.get(
-            page_url,
-            headers=headers,
-            timeout=15,
-            allow_redirects=True
-        )
+        resp = requests.get(page_url, headers=headers, timeout=15, allow_redirects=True)
         
         if resp.status_code != 200:
             return {}
@@ -375,7 +370,6 @@ def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
         
         # Если попали на agecheck — редирект с параметром
         if '/agecheck/' in resp.url or 'agecheck' in html.lower():
-            # Пробуем с параметром ageDay
             age_url = f"https://store.steampowered.com/app/{app_id}/?ageDay=1&ageMonth=1&ageYear=1990"
             resp2 = requests.get(age_url, headers=headers, timeout=15)
             if resp2.status_code == 200:
@@ -389,50 +383,103 @@ def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
             'all': []
         }
         
-        # 🔥 Улучшенные паттерны (ищем в любом месте HTML, включая JSON внутри JS)
+        # 🔥 1. НОВЫЙ ФОРМАТ (с хешами) - для новых игр
+        # Пример: https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3660800/f4994d6feded29512ec4467e2fda2decdc79b322/header.jpg
         
-        # 1. Новый формат header с хешем
-        pattern_new = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{30,50}}/header\.jpg)'
-        matches = re.findall(pattern_new, html)
+        # 1a. Header в новом формате
+        pattern_new_header = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{40}}/header\.jpg[^"\'\s<>]*)'
+        matches = re.findall(pattern_new_header, html)
         if matches:
             result['header'] = matches[0]
             result['all'].append(matches[0])
         
-        # 2. Старый header (любой CDN)
-        if not result['header']:
-            pattern_old = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/header\.jpg)'
-            matches = re.findall(pattern_old, html)
-            if matches:
-                result['header'] = matches[0]
-                result['all'].append(matches[0])
-        
-        # 3. Hero capsule (большая красивая картинка)
-        pattern_hero = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/hero_capsule\.jpg)'
-        matches = re.findall(pattern_hero, html)
-        if matches:
-            result['hero'] = matches[0]
-            result['all'].append(matches[0])
-        
-        # 4. Capsule (средняя, используется часто)
-        pattern_capsule = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/capsule_616x353\.jpg)'
-        matches = re.findall(pattern_capsule, html)
+        # 1b. Capsule в новом формате
+        pattern_new_capsule = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{40}}/capsule_616x353\.jpg[^"\'\s<>]*)'
+        matches = re.findall(pattern_new_capsule, html)
         if matches:
             result['capsule'] = matches[0]
-            result['all'].append(matches[0])
+            if matches[0] not in result['all']:
+                result['all'].append(matches[0])
         
-        # 5. Library header (вертикальная)
-        pattern_lib = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/library_600x900\.jpg)'
-        matches = re.findall(pattern_lib, html)
+        # 1c. Любые изображения в новом формате
+        pattern_new_any = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{40}}/[^"\'\s<>]+?\.jpg[^"\'\s<>]*)'
+        matches = re.findall(pattern_new_any, html)
+        for img_url in matches[:10]:
+            if img_url not in result['all']:
+                result['all'].append(img_url)
+        
+        # 🔥 2. СТАРЫЙ ФОРМАТ (без хешей) - для старых игр
+        # Пример: https://cdn.cloudflare.steamstatic.com/steam/apps/730/header.jpg
+        
+        # 2a. Header в старом формате (если еще не нашли)
+        if not result['header']:
+            pattern_old_header = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/header\.jpg)'
+            matches = re.findall(pattern_old_header, html)
+            if matches:
+                result['header'] = matches[0]
+                if matches[0] not in result['all']:
+                    result['all'].append(matches[0])
+        
+        # 2b. Capsule в старом формате (если еще не нашли)
+        if not result['capsule']:
+            pattern_old_capsule = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/capsule_616x353\.jpg)'
+            matches = re.findall(pattern_old_capsule, html)
+            if matches:
+                result['capsule'] = matches[0]
+                if matches[0] not in result['all']:
+                    result['all'].append(matches[0])
+        
+        # 2c. Hero в старом формате
+        pattern_old_hero = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/hero_capsule\.jpg)'
+        matches = re.findall(pattern_old_hero, html)
+        if matches:
+            result['hero'] = matches[0]
+            if matches[0] not in result['all']:
+                result['all'].append(matches[0])
+        
+        # 2d. Library в старом формате
+        pattern_old_lib = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/library_600x900\.jpg)'
+        matches = re.findall(pattern_old_lib, html)
         if matches:
             result['library'] = matches[0]
-            result['all'].append(matches[0])
+            if matches[0] not in result['all']:
+                result['all'].append(matches[0])
         
-        # 6. Любые другие изображения этой игры (на всякий случай)
-        pattern_any = rf'(https://[^"\'\s<>]+?steamstatic\.com/[^"\'\s<>]*?/{app_id}/[^"\'\s<>]+?\.jpg)'
-        matches = re.findall(pattern_any, html)
-        for m in matches[:5]:  # первые 5
-            if m not in result['all']:
-                result['all'].append(m)
+        # 🔥 3. JSON данные в HTML (часто там есть изображения)
+        pattern_json = r'"header_image":"([^"]+)"'
+        matches = re.findall(pattern_json, html)
+        for img_url in matches:
+            if img_url and img_url not in result['all']:
+                result['all'].append(img_url)
+                if not result['header'] and 'header' in img_url:
+                    result['header'] = img_url
+        
+        # 🔥 4. Если ничего не нашли, пробуем стандартные URL
+        if not result['all']:
+            standard_urls = [
+                f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg",
+                f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
+                f"https://steamcdn-a.akamaihd.net/steam/apps/{app_id}/header.jpg",
+                f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/capsule_616x353.jpg",
+            ]
+            
+            for standard_url in standard_urls:
+                try:
+                    resp_test = requests.head(standard_url, timeout=2)
+                    if resp_test.status_code == 200:
+                        result['all'].append(standard_url)
+                        if not result['header'] and 'header.jpg' in standard_url:
+                            result['header'] = standard_url
+                        elif not result['capsule'] and 'capsule_616x353' in standard_url:
+                            result['capsule'] = standard_url
+                        break
+                except:
+                    continue
+        
+        # Выбираем лучшее изображение
+        best = result['header'] or result['capsule'] or result['hero'] or result['library']
+        if best and best not in result.get('all', []):
+            result['all'].append(best)
         
         return result
         
@@ -466,6 +513,32 @@ def steam_header_cdn_from_url(url: str) -> str | None:
     appid = m.group(1)
     return f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg"
 
+def validate_steam_app_id(app_id: str) -> bool:
+    """
+    Проверяет, является ли AppID валидным для Steam.
+    Возвращает True если изображение существует.
+    """
+    if not app_id or not app_id.isdigit():
+        return False
+    
+    # Пробуем несколько типов изображений
+    test_urls = [
+        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg",
+        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/capsule_616x353.jpg",
+        f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
+    ]
+    
+    for test_url in test_urls:
+        try:
+            resp = requests.head(test_url, timeout=3, allow_redirects=True)
+            if resp.status_code == 200:
+                content_type = resp.headers.get('Content-Type', '')
+                if 'image' in content_type or 'jpeg' in content_type:
+                    return True
+        except:
+            continue
+    
+    return False
 
 
 # --------------------
@@ -602,9 +675,8 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
         data.get("list") or data.get("data") or data.get("items") or data.get("result") or []
     )
 
-    resolved_slow = 0
-    scrape_left = 10  # парсинг страниц для изображений
     out: list[dict] = []
+    scrape_left = 10  # парсинг страниц для изображений
 
     for it in items:
         if not isinstance(it, dict):
@@ -633,11 +705,8 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
         expiry = deal.get("expiry") or it.get("expiry")
         start = deal.get("start") or it.get("start")
 
-        # appid: быстрый парсинг, иначе ограниченно через редиректы
+        # appid: быстрый парсинг
         app_id = extract_steam_app_id_fast(url) or ""
-        if not app_id and resolved_slow < slow_limit:
-            resolved_slow += 1
-            app_id = resolve_steam_app_id_limited(url, allow_slow=True) or ""
 
         # 🔥 Парсим изображения со страницы Steam
         image_url = None
@@ -657,7 +726,15 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
         # Фоллбэк на стандартные URL
         if not image_url and app_id:
             cands = steam_header_candidates(app_id)
-            image_url = cands[0] if cands else None
+            # Пробуем найти работающий URL
+            for cand in cands:
+                try:
+                    resp = requests.head(cand, timeout=2)
+                    if resp.status_code == 200:
+                        image_url = cand
+                        break
+                except:
+                    continue
 
         out.append({
             "store": "steam",
@@ -765,7 +842,15 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
         # Фоллбэк на стандартные URL если парсинг не сработал
         if not image_url and app_id:
             cands = steam_header_candidates(app_id)
-            image_url = cands[0] if cands else None
+            # Пробуем найти работающий URL
+            for cand in cands:
+                try:
+                    resp = requests.head(cand, timeout=2)
+                    if resp.status_code == 200:
+                        image_url = cand
+                        break
+                except:
+                    continue
 
         out.append({
             "store": "steam",
@@ -1218,7 +1303,7 @@ PAGE = Template("""
       border-radius:999px;
       font-size:13px;
       color:var(--muted);
-      display:inline-flex; align-items:center; gap:8px;
+      display:inline-flex align-items:center; gap:8px;
       border:1px solid transparent;
       white-space:nowrap;
     }
@@ -1683,6 +1768,35 @@ def store_badge(store: str | None) -> str:
     return {"steam": "🎮 Steam", "epic": "🟦 Epic", "gog": "🟪 GOG", "prime": "🟨 Prime"}.get(store or "", store or "Store")
 
 
+def images_for_row(row_store: str | None, url: str, image_url: str | None):
+    """⭐ Улучшенная логика с поддержкой нового формата Steam"""
+    st = (row_store or "").strip().lower()
+    
+    # Если в БД уже есть картинка — используем её как основную
+    if image_url:
+        # Для Steam добавляем фоллбэки
+        if st == "steam":
+            appid = extract_steam_app_id_fast(url)
+            if appid:
+                cands = steam_header_candidates(appid)
+                # Используем capsule как фоллбэк
+                fallback = cands[2] if len(cands) > 2 else cands[0] if cands else ""
+                return image_url, fallback
+        return image_url, ""
+    
+    # Для Steam генерируем список кандидатов
+    if st == "steam":
+        appid = extract_steam_app_id_fast(url)
+        if appid:
+            # Генерируем кандидаты в порядке приоритета
+            cands = steam_header_candidates(appid)
+            main = cands[0] if cands else ""  # первый кандидат как основной
+            fb = cands[2] if len(cands) > 2 else ""  # capsule как фоллбэк
+            return main, fb
+    
+    return "", ""
+
+
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     conn = db()
@@ -1738,33 +1852,6 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         if store == "all":
             return True
         return (row_store or "").strip().lower() == store
-
-    def images_for_row(row_store: str | None, url: str, image_url: str | None):
-        """⭐ Улучшенная логика с фоллбэками для обложек"""
-        st = (row_store or "").strip().lower()
-        
-        # Если в БД уже есть картинка — используем её как основную
-        if image_url:
-            # Для Steam добавляем фоллбэки
-            if st == "steam":
-                appid = extract_steam_app_id_fast(url)
-                if appid:
-                    cands = steam_header_candidates(appid)
-                    # Первый фоллбэк — capsule (другой формат)
-                    fallback = cands[2] if len(cands) > 2 else ""
-                    return image_url, fallback
-            return image_url, ""
-        
-        # Для Steam генерируем список кандидатов
-        if st == "steam":
-            appid = extract_steam_app_id_fast(url)
-            if appid:
-                cands = steam_header_candidates(appid)
-                main = cands[0] if cands else ""  # cloudflare header
-                fb = cands[2] if len(cands) > 2 else ""  # capsule как фоллбэк
-                return main, fb
-        
-        return "", ""
 
     # keep
     keep = []
