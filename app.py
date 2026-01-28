@@ -355,11 +355,10 @@ def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
+            # 🔥 ВАЖНО: обход age gate через cookies
+            'Cookie': 'birthtime=0; mature_content=1; wants_mature_content=1; lastagecheckage=1-0-1990',
         }
         
         resp = requests.get(
@@ -374,6 +373,14 @@ def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
         
         html = resp.text
         
+        # Если попали на agecheck — редирект с параметром
+        if '/agecheck/' in resp.url or 'agecheck' in html.lower():
+            # Пробуем с параметром ageDay
+            age_url = f"https://store.steampowered.com/app/{app_id}/?ageDay=1&ageMonth=1&ageYear=1990"
+            resp2 = requests.get(age_url, headers=headers, timeout=15)
+            if resp2.status_code == 200:
+                html = resp2.text
+        
         result = {
             'header': None,
             'capsule': None,
@@ -382,49 +389,50 @@ def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
             'all': []
         }
         
-        # Паттерны для разных типов изображений
-        patterns = {
-            # Новый формат header с хешем (ПРИОРИТЕТ!)
-            'header_new': rf'(https://shared\.[^"\'<>\s]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]+/header\.jpg)',
-            # Старый header
-            'header_old': rf'(https://cdn\.[^"\'<>\s]+?steamstatic\.com/steam/apps/{app_id}/header\.jpg)',
-            # Hero capsule (большая картинка)
-            'hero': rf'(https://[^"\'<>\s]+?steamstatic\.com/steam/apps/{app_id}/hero_capsule\.jpg)',
-            # Capsule (средняя)
-            'capsule': rf'(https://[^"\'<>\s]+?steamstatic\.com/steam/apps/{app_id}/capsule_616x353\.jpg)',
-            # Library
-            'library': rf'(https://[^"\'<>\s]+?steamstatic\.com/steam/apps/{app_id}/library_600x900\.jpg)',
-        }
+        # 🔥 Улучшенные паттерны (ищем в любом месте HTML, включая JSON внутри JS)
         
-        # Ищем header (новый формат в приоритете)
-        for match in re.finditer(patterns['header_new'], html):
-            result['header'] = match.group(1)
-            result['all'].append(match.group(1))
-            break
+        # 1. Новый формат header с хешем
+        pattern_new = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{30,50}}/header\.jpg)'
+        matches = re.findall(pattern_new, html)
+        if matches:
+            result['header'] = matches[0]
+            result['all'].append(matches[0])
         
+        # 2. Старый header (любой CDN)
         if not result['header']:
-            for match in re.finditer(patterns['header_old'], html):
-                result['header'] = match.group(1)
-                result['all'].append(match.group(1))
-                break
+            pattern_old = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/header\.jpg)'
+            matches = re.findall(pattern_old, html)
+            if matches:
+                result['header'] = matches[0]
+                result['all'].append(matches[0])
         
-        # Hero capsule
-        for match in re.finditer(patterns['hero'], html):
-            result['hero'] = match.group(1)
-            result['all'].append(match.group(1))
-            break
+        # 3. Hero capsule (большая красивая картинка)
+        pattern_hero = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/hero_capsule\.jpg)'
+        matches = re.findall(pattern_hero, html)
+        if matches:
+            result['hero'] = matches[0]
+            result['all'].append(matches[0])
         
-        # Capsule
-        for match in re.finditer(patterns['capsule'], html):
-            result['capsule'] = match.group(1)
-            result['all'].append(match.group(1))
-            break
+        # 4. Capsule (средняя, используется часто)
+        pattern_capsule = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/capsule_616x353\.jpg)'
+        matches = re.findall(pattern_capsule, html)
+        if matches:
+            result['capsule'] = matches[0]
+            result['all'].append(matches[0])
         
-        # Library
-        for match in re.finditer(patterns['library'], html):
-            result['library'] = match.group(1)
-            result['all'].append(match.group(1))
-            break
+        # 5. Library header (вертикальная)
+        pattern_lib = rf'(https://[^"\'\s<>]+?steamstatic\.com/steam/apps/{app_id}/library_600x900\.jpg)'
+        matches = re.findall(pattern_lib, html)
+        if matches:
+            result['library'] = matches[0]
+            result['all'].append(matches[0])
+        
+        # 6. Любые другие изображения этой игры (на всякий случай)
+        pattern_any = rf'(https://[^"\'\s<>]+?steamstatic\.com/[^"\'\s<>]*?/{app_id}/[^"\'\s<>]+?\.jpg)'
+        matches = re.findall(pattern_any, html)
+        for m in matches[:5]:  # первые 5
+            if m not in result['all']:
+                result['all'].append(m)
         
         return result
         
