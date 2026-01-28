@@ -255,21 +255,21 @@ def cleanup_expired(keep_days: int = 7) -> int:
 # Steam image helpers
 # --------------------
 def extract_steam_app_id_fast(url: str) -> str | None:
-    """Извлекает app_id из URL Steam, включая itad.link редиректы"""
+    """Быстро извлекает app_id из любого URL где есть /app/"""
     if not url:
         return None
     
-    # Сначала пробуем извлечь из прямого Steam URL
-    m = re.search(r"store\.steampowered\.com/app/(\d+)", url)
-    if m:
-        return m.group(1)
+    # Ищем /app/123456 в любом месте URL
+    import re
+    match = re.search(r'/app/(\d+)', url)
+    if match:
+        return match.group(1)
     
-    m = re.search(r"/app/(\d+)", url)
-    if m:
-        return m.group(1)
+    # Также пробуем store.steampowered.com/app/
+    match = re.search(r'store\.steampowered\.com/app/(\d+)', url)
+    if match:
+        return match.group(1)
     
-    # 🔥 ВАЖНО: Для itad.link нам нужно сделать запрос чтобы получить конечный URL
-    # Но в функции 'fast' мы не делаем запросы, поэтому возвращаем None
     return None
 
 def get_real_steam_app_id(url: str) -> str | None:
@@ -1662,9 +1662,16 @@ button.btn{font-family: inherit}
       <div class="card">
         <div class="thumb">
   {% if d["image"] %}
-    <img src="{{ d["image"] }}" alt="cover"
-         onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
-         data-fallback="{{ d.get('image_fallback','') }}"/>
+    <img 
+      src="{{ d['image'] }}" 
+      alt="{{ d['title'] }}"
+      loading="lazy"
+      onerror="
+        console.log('Image failed:', this.src);
+        this.src = 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 300 140\"%3E%3Crect width=\"300\" height=\"140\" fill=\"%230f1730\"/%3E%3Ctext x=\"150\" y=\"75\" font-size=\"14\" text-anchor=\"middle\" fill=\"%2399a3cc\"%3E{{ d['title'][:30] }}%3C/text%3E%3C/svg%3E';
+        this.onerror = null;
+      "
+    />
   {% else %}
     <div class="ph">Нет обложки</div>
   {% endif %}
@@ -1802,70 +1809,48 @@ def store_badge(store: str | None) -> str:
 
 
 def images_for_row(row_store: str | None, url: str, image_url: str | None):
-    """🔥 ИСПРАВЛЕННАЯ функция для Steam изображений с поддержкой itad.link"""
+    """🔥 БЫСТРАЯ функция без HTTP-запросов"""
     st = (row_store or "").strip().lower()
     
-    # 1. Если в БД уже есть картинка И она работает - используем её
+    # 1. Если в БД уже есть картинка - используем её
     if image_url and image_url.strip():
-        try:
-            # Быстрая проверка доступности
-            resp = requests.head(image_url, timeout=2, allow_redirects=True)
-            if resp.status_code == 200:
-                return image_url, ""
-        except:
-            pass  # Если не работает, будем генерировать новую
+        return image_url, ""
     
-    # 2. Для Steam
+    # 2. Для Steam генерируем URL
     if st == "steam":
-        # 🔥 ВАЖНО: Пробуем получить AppID разными способами
-        appid = None
+        # Пробуем извлечь AppID разными способами
         
-        # Способ 1: Из URL (если это прямой Steam URL)
+        # Способ 1: Из URL (если это уже прямой Steam URL после исправления)
         appid = extract_steam_app_id_fast(url)
         
-        # Способ 2: Из image_url если есть (там уже есть AppID!)
-        if not appid and image_url:
-            # Извлекаем AppID из image_url который уже в БД
-            # Пример: https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3764420/header.jpg
-            m = re.search(r'/apps/(\d+)/', image_url)
-            if m:
-                appid = m.group(1)
+        # Способ 2: Если не нашли, пробуем получить из БД или другим способом
+        if not appid:
+            # Может быть в БД уже есть image_url с AppID
+            if image_url:
+                # Извлекаем AppID из image_url: https://.../apps/123456/header.jpg
+                import re
+                m = re.search(r'/apps/(\d+)/', image_url)
+                if m:
+                    appid = m.group(1)
         
         if appid:
-            print(f"DEBUG: Found appid={appid} for url={url[:50]}...")
-            
-            # 🔥 ГЛАВНОЕ: Steam требует полный URL с хешем!
-            # Старые форматы НЕ РАБОТАЮТ для новых игр
-            
-            # Для игр с AppID до 10 млн (старые игры) - старый формат может работать
-            # Для новых игр (> 10 млн) - нужен новый формат с хешем
-            
-            app_num = int(appid) if appid.isdigit() else 0
-            
-            if app_num < 10000000:  # Старые игры
-                candidates = [
-                    f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
-                    f"https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg",
-                    f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_616x353.jpg",
-                ]
-            else:  # Новые игры (нужен хеш)
-                # 🔥 Для новых игр мы не знаем хеш, но можем использовать такой URL:
-                # Steam сделает редирект на правильный URL если нужно
-                candidates = [
-                    f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg",
-                    f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg",
-                ]
-            
-            # Проверяем кандидатов
-            for candidate in candidates:
-                try:
-                    resp = requests.head(candidate, timeout=3, allow_redirects=True)
-                    if resp.status_code == 200:
-                        print(f"DEBUG: Working image: {candidate[:80]}...")
-                        return candidate, ""
-                except Exception as e:
-                    print(f"DEBUG: Failed {candidate[:50]}: {e}")
-                    continue
+            # 🔥 БЫСТРО генерируем URL без проверок
+            # Для новых игр (> 10 млн) используем новый формат
+            try:
+                app_num = int(appid)
+                if app_num >= 10000000:  # Новые игры
+                    main = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+                    fallback = f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+                else:  # Старые игры
+                    main = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
+                    fallback = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_616x353.jpg"
+                
+                return main, fallback
+            except:
+                # Если ошибка конвертации
+                main = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+                fallback = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_616x353.jpg"
+                return main, fallback
     
     # 3. Ничего не нашли
     return "", ""
