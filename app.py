@@ -272,15 +272,34 @@ def steam_header_image_from_url_fast(url: str) -> str | None:
         return None
     return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
 
-def steam_header_candidates(app_id: str) -> list[str]:
-    """Возвращает список URL-ов обложек Steam в порядке приоритета"""
-    if not app_id:
+def steam_image_candidates(appid: str) -> list[str]:
+    if not appid:
         return []
     return [
-        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg",
-        f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{app_id}/header.jpg",
-        f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{app_id}/header.jpg",
+        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
+        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_600x900.jpg",
+        f"https://shared.akamai.steamstatic.com/steam/apps/{appid}/header.jpg",
+        f"https://shared.fastly.steamstatic.com/steam/apps/{appid}/header.jpg",
     ]
+
+
+def images_for_row(row_store: str | None, url: str, image_url: str | None):
+    st = (row_store or "").strip().lower()
+
+    # 1) если картинка уже есть в БД (Epic / или Steam если сохранили) — используем её
+    if image_url:
+        return image_url, "" , ""  # main, fb1, fb2
+
+    # 2) Steam — строим кандидаты
+    if st == "steam":
+        appid = extract_steam_app_id_fast(url)
+        c = steam_image_candidates(appid) if appid else []
+        main = c[0] if len(c) > 0 else ""
+        fb1  = c[1] if len(c) > 1 else ""
+        fb2  = c[2] if len(c) > 2 else ""
+        return main, fb1, fb2
+
+    return "", "", ""
 
 
 def resolve_steam_app_id(url: str) -> str | None:
@@ -1397,9 +1416,32 @@ button.btn{font-family: inherit}
       <div class="card">
         <div class="thumb">
   {% if d["image"] %}
-    <img src="{{ d["image"] }}" alt="cover"
-         onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
-         data-fallback="{{ d.get('image_fallback','') }}"/>
+    <img
+   src="{{ d['image'] }}"
+  alt=""
+  loading="lazy"
+  referrerpolicy="no-referrer"
+  data-fallback="{{ d.get('image_fallback','') }}"
+  data-fallback2="{{ d.get('image_fallback2','') }}"
+  onerror="
+    if(!this.dataset.try1){ this.dataset.try1=1; if(this.dataset.fallback){ this.src=this.dataset.fallback; return; } }
+    if(!this.dataset.try2){ this.dataset.try2=1; if(this.dataset.fallback2){ this.src=this.dataset.fallback2; return; } }
+    this.remove();">
+                <script>
+document.addEventListener("error", function(e){
+  const img = e.target;
+  if(img && img.tagName === "IMG" && img.parentElement && img.parentElement.classList.contains("thumb")){
+    // если img удалился — покажем "Нет обложки"
+    if(!img.isConnected){
+      const ph = document.createElement("div");
+      ph.className = "ph";
+      ph.textContent = "Нет обложки";
+      img.parentElement.appendChild(ph);
+    }
+  }
+}, true);
+</script>
+
   {% else %}
     <div class="ph">Нет обложки</div>
   {% endif %}
@@ -1616,14 +1658,15 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     for r in keep_rows:
         if not (allow_time(r[4]) and allow_store(r[0])):
             continue
-        img_main, img_fb = images_for_row(r[0], r[2], r[3])
+        img_main, img_fb1, img_fb2 = images_for_row(r[0], r[2], r[3])
 
         keep.append({
             "store_badge": store_badge(r[0]),
             "title": r[1],
             "url": r[2],
             "image": img_main,
-            "image_fallback": img_fb,
+            "image_fallback": img_fb1,
+            "image_fallback2": img_fb2,
             "ends_at": r[4],
             "is_new": is_new(r[5]),
             "ends_at_fmt": format_expiry(r[4]),
@@ -1637,14 +1680,15 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     for r in weekend_rows:
         if not (allow_time(r[4]) and allow_store(r[0])):
             continue
-        img_main, img_fb = images_for_row(r[0], r[2], r[3])
+        img_main, img_fb1, img_fb2 = images_for_row(r[0], r[2], r[3])
 
         weekend.append({
             "store_badge": store_badge(r[0]),
             "title": r[1],
             "url": r[2],
             "image": img_main,
-            "image_fallback": img_fb,
+            "image_fallback": img_fb1,
+            "image_fallback2": img_fb2,
             "ends_at": r[4],
             "is_new": is_new(r[5]),
             "ends_at_fmt": format_expiry(r[4]),
@@ -1658,14 +1702,15 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     for r in hot_rows:
         if not allow_store(r[0]):
             continue
-        img_main, img_fb = images_for_row(r[0], r[2], r[3])
+        img_main, img_fb1, img_fb2 = images_for_row(r[0], r[2], r[3])
 
         hot.append({
             "store_badge": store_badge(r[0]),
             "title": r[1],
             "url": r[2],
             "image": img_main,
-            "image_fallback": img_fb,
+            "image_fallback": img_fb1,
+            "image_fallback2": img_fb2,
             "ends_at": r[4],
             "is_new": is_new(r[5]),
             "ends_at_fmt": format_expiry(r[4]),
