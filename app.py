@@ -1277,536 +1277,882 @@ def fetch_prime(): return []
 # WEBSITE
 # --------------------
 PAGE = Template("""
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>FreeRedeemGames</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101a33'/%3E%3Ctext x='50%25' y='56%25' font-size='34' text-anchor='middle'%3E%F0%9F%8E%AE%3C/text%3E%3C/svg%3E">
-  <style>
-    :root{
-      --bg:#0b1020;
-      --panel:#101a33;
-      --panel2:#0f1730;
-      --text:#e7ecff;
-      --muted:#a9b4dd;
-      --line:rgba(255,255,255,.10);
-      --chip:rgba(255,255,255,.08);
-      --ok:#2dd4bf;
-      --warn:#fbbf24;
-      --bad:#fb7185;
-      --shadow: 0 12px 30px rgba(0,0,0,.35);
-      --radius:16px;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>🎮 Free Game Deals - Бесплатные игры Steam, Epic, GOG, Prime</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23111827'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='%23667eea'>🎮</text></svg>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    :root {
+        /* Игровая палитра */
+        --bg-primary: #0a0e1a;
+        --bg-secondary: #111827;
+        --bg-card: #1a1f36;
+        --bg-hover: #252a44;
+        
+        /* Акцентные цвета */
+        --accent-steam: #1b2838;
+        --accent-epic: #2a2a2a;
+        --accent-gog: #863a8a;
+        --accent-prime: #ff9900;
+        
+        /* Текст */
+        --text-primary: #e2e8f0;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+        
+        /* Статусы */
+        --status-new: #10b981;
+        --status-expiring: #f59e0b;
+        --status-expired: #ef4444;
+        --status-free: #3b82f6;
+        
+        /* Градиенты */
+        --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --gradient-steam: linear-gradient(135deg, #1b2838 0%, #2a475e 100%);
+        --gradient-epic: linear-gradient(135deg, #2a2a2a 0%, #121212 100%);
+        
+        /* Тени */
+        --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        --shadow-hover: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+        
+        /* Скругления */
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 24px;
+        
+        /* Анимации */
+        --transition: all 0.3s ease;
     }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: radial-gradient(1200px 700px at 20% 0%, #182a5a 0%, var(--bg) 55%) fixed;
-      color:var(--text);
+    
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
     }
-    a{color:inherit; text-decoration:none}
-    .wrap{max-width:1100px; margin:28px auto; padding:0 16px;}
-    .top{
-      display:flex; gap:14px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap;
-      margin-bottom:14px;
+    
+    body {
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        line-height: 1.6;
+        min-height: 100vh;
+        background-image: 
+            radial-gradient(circle at 10% 20%, rgba(100, 126, 234, 0.1) 0%, transparent 20%),
+            radial-gradient(circle at 90% 80%, rgba(118, 75, 162, 0.1) 0%, transparent 20%);
     }
-    .brand{
-      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      padding:14px 16px;
-      box-shadow: var(--shadow);
-      flex: 1 1 520px;
+    
+    /* Контейнер */
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 16px;
     }
-    .brand h1{margin:0 0 6px 0; font-size:22px; letter-spacing:.2px}
-    .brand p{margin:0; color:var(--muted); font-size:13px; line-height:1.4}
-    .controls{
-      flex: 0 0 auto;
-      display:flex; gap:10px; flex-wrap:wrap;
-      align-items:center; justify-content:flex-end;
+    
+    /* Хедер */
+    .header {
+        padding: 24px 0;
+        margin-bottom: 32px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(10, 14, 26, 0.9);
+        backdrop-filter: blur(10px);
+        position: sticky;
+        top: 0;
+        z-index: 100;
     }
-
-    .seg{
-      background: rgba(255,255,255,.06);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 6px;
-      display:flex;
-      gap:6px;
-      box-shadow: var(--shadow);
+    
+    .brand {
+        text-align: center;
+        margin-bottom: 24px;
     }
-    .seg a, .seg span{
-      padding:8px 12px;
-      border-radius:999px;
-      font-size:13px;
-      color:var(--muted);
-      display:inline-flex align-items:center; gap:8px;
-      border:1px solid transparent;
-      white-space:nowrap;
+    
+    .brand h1 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: var(--gradient-primary);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 8px;
+        letter-spacing: -0.5px;
     }
-    .seg .on{
-      background: rgba(45,212,191,.18);
-      color:var(--text);
-      border-color: rgba(45,212,191,.35);
+    
+    .brand p {
+        color: var(--text-secondary);
+        font-size: 1rem;
+        max-width: 600px;
+        margin: 0 auto;
     }
-    .seg a:hover{background: rgba(255,255,255,.08); color:var(--text)}
-    .chips{
-      display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 16px;
+    
+    /* Статистика */
+    .stats {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
     }
-    .chip{
-      display:inline-flex; align-items:center; gap:8px;
-      background: var(--chip);
-      border:1px solid var(--line);
-      padding:8px 10px;
-      border-radius:999px;
-      font-size:13px;
-      color:var(--muted);
+    
+    .stat-item {
+        background: var(--bg-card);
+        padding: 12px 20px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: var(--transition);
     }
-    .chip strong{color:var(--text); font-weight:600}
-    .grid{
-      display:grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
+    
+    .stat-item:hover {
+        transform: translateY(-2px);
+        border-color: rgba(255, 255, 255, 0.2);
     }
-    @media (max-width: 980px){
-      .grid{grid-template-columns: repeat(2, 1fr);}
+    
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
     }
-    @media (max-width: 640px){
-      .grid{grid-template-columns: 1fr;}
+    
+    .stat-label {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
     }
-
-    .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      overflow:hidden;
-      box-shadow: var(--shadow);
-      transition: transform .15s ease, border-color .15s ease;
+    
+    /* Фильтры */
+    .filters {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 32px;
     }
-    .card:hover{transform: translateY(-2px); border-color: rgba(255,255,255,.18)}
-    .thumb{
-      height: 140px;
-      background: rgba(255,255,255,.05);
-      border-bottom:1px solid var(--line);
-      display:flex; align-items:center; justify-content:center;
-      overflow:hidden;
+    
+    .filter-group {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
     }
-    .thumb img{width:100%; height:100%; object-fit:cover; display:block}
-    .thumb .ph{
-      color: rgba(255,255,255,.35);
-      font-size:12px;
-      padding:12px;
-      text-align:center;
+    
+    .filter-btn {
+        padding: 10px 20px;
+        border-radius: var(--radius-md);
+        border: 2px solid transparent;
+        background: var(--bg-card);
+        color: var(--text-secondary);
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.95rem;
     }
-    .body{padding:12px 12px 14px}
-    .row1{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;}
-    .badge{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:6px 10px;
-      border-radius:999px;
-      font-size:12px;
-      background: rgba(255,255,255,.08);
-      border:1px solid var(--line);
-      color: var(--text);
-      white-space:nowrap;
+    
+    .filter-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+        transform: translateY(-1px);
     }
-    .meta{
-      font-size:12px;
-      color:var(--muted);
-      white-space:nowrap;
+    
+    .filter-btn.active {
+        background: var(--gradient-primary);
+        color: white;
+        border-color: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
     }
-    .title{
-      font-size:14px;
-      font-weight:650;
-      line-height:1.25;
-      margin:0 0 10px 0;
-      min-height: 36px;
+    
+    /* Карточки игр */
+    .games-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 24px;
+        margin-bottom: 48px;
     }
-    .actions{
-      display:flex; gap:8px; flex-wrap:wrap;
+    
+    .game-card {
+        background: var(--bg-card);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: var(--transition);
+        position: relative;
     }
-    .btn{
-      display:inline-flex; align-items:center; justify-content:center;
-      padding:10px 12px;
-      border-radius: 12px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      font-size:13px;
-      cursor:pointer;
+    
+    .game-card:hover {
+        transform: translateY(-8px);
+        border-color: rgba(255, 255, 255, 0.2);
+        box-shadow: var(--shadow-hover);
     }
-    .btn:hover{background: rgba(255,255,255,.10)}
-    .btn.primary{
-      background: rgba(45,212,191,.18);
-      border-color: rgba(45,212,191,.35);
+    
+    /* Бейдж магазина */
+    .store-badge {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        z-index: 2;
     }
-    .btn.primary:hover{background: rgba(45,212,191,.24)}
-    .pill{
-      display:inline-flex; align-items:center;
-      padding:6px 10px;
-      border-radius:999px;
-      font-size:12px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.06);
-      color:var(--muted);
+    
+    .store-steam { background: var(--accent-steam); color: white; }
+    .store-epic { background: var(--accent-epic); color: white; }
+    .store-gog { background: var(--accent-gog); color: white; }
+    .store-prime { background: var(--accent-prime); color: #000; }
+    
+    /* Изображение */
+    .game-image {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        display: block;
+        transition: var(--transition);
     }
-    .pill.ok{color:var(--ok); border-color: rgba(45,212,191,.35); background: rgba(45,212,191,.12);}
-    .pill.exp{color:var(--bad); border-color: rgba(251,113,133,.35); background: rgba(251,113,133,.10);}
-    .section{
-      margin-top:18px;
+    
+    .game-card:hover .game-image {
+        transform: scale(1.05);
     }
-    .section h2{
-      margin: 18px 0 10px;
-      font-size: 16px;
-      color: var(--text);
-      letter-spacing:.2px;
+    
+    .image-placeholder {
+        width: 100%;
+        height: 180px;
+        background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
     }
-    .empty{
-      color: var(--muted);
-      background: rgba(255,255,255,.05);
-      border: 1px dashed rgba(255,255,255,.18);
-      border-radius: var(--radius);
-      padding: 14px;
+    
+    /* Контент карточки */
+    .game-content {
+        padding: 20px;
     }
-     .toast{
-  position: fixed;
-  left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
-  background: rgba(16,26,51,.95);
-  border: 1px solid var(--line);
-  padding: 10px 14px;
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  color: var(--text);
-  font-size: 13px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .18s ease, transform .18s ease;
-}
-.toast.on{
-  opacity: 1;
-  transform: translateX(-50%) translateY(-2px);
-}
-button.btn{font-family: inherit}
-
-  </style>
+    
+    .game-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-bottom: 12px;
+        line-height: 1.4;
+        color: var(--text-primary);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    
+    /* Мета информация */
+    .game-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+    }
+    
+    .meta-tag {
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .tag-new { background: rgba(16, 185, 129, 0.2); color: var(--status-new); }
+    .tag-free { background: rgba(59, 130, 246, 0.2); color: var(--status-free); }
+    .tag-expiring { background: rgba(245, 158, 11, 0.2); color: var(--status-expiring); }
+    .tag-expired { background: rgba(239, 68, 68, 0.2); color: var(--status-expired); }
+    
+    /* Таймер */
+    .game-timer {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 10px;
+        border-radius: var(--radius-md);
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .timer-icon {
+        color: var(--status-expiring);
+        font-size: 1.2rem;
+    }
+    
+    .timer-text {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+    }
+    
+    .timer-time {
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-left: auto;
+    }
+    
+    /* Кнопки */
+    .game-actions {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .btn {
+        padding: 10px 20px;
+        border-radius: var(--radius-md);
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        flex: 1;
+        font-size: 0.9rem;
+    }
+    
+    .btn-primary {
+        background: var(--gradient-primary);
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-secondary {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateY(-2px);
+    }
+    
+    /* Секции */
+    .section {
+        margin-bottom: 48px;
+    }
+    
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .section-icon {
+        font-size: 1.5rem;
+    }
+    
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+    
+    .section-count {
+        background: var(--gradient-primary);
+        color: white;
+        padding: 4px 12px;
+        border-radius: var(--radius-sm);
+        font-size: 0.875rem;
+        font-weight: 700;
+    }
+    
+    /* Адаптивность */
+    @media (max-width: 768px) {
+        .container {
+            padding: 0 12px;
+        }
+        
+        .brand h1 {
+            font-size: 2rem;
+        }
+        
+        .games-grid {
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        
+        .game-content {
+            padding: 16px;
+        }
+        
+        .filters {
+            gap: 8px;
+        }
+        
+        .filter-btn {
+            padding: 8px 16px;
+            font-size: 0.875rem;
+        }
+        
+        .stats {
+            gap: 8px;
+        }
+        
+        .stat-item {
+            padding: 10px 16px;
+        }
+        
+        .section-title {
+            font-size: 1.25rem;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .games-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .brand h1 {
+            font-size: 1.75rem;
+        }
+        
+        .filter-group {
+            width: 100%;
+        }
+        
+        .filter-btn {
+            flex: 1;
+            justify-content: center;
+        }
+        
+        .game-actions {
+            flex-direction: column;
+        }
+        
+        .btn {
+            width: 100%;
+        }
+    }
+    
+    /* Пустой стейт */
+    .empty-state {
+        text-align: center;
+        padding: 48px 24px;
+        background: var(--bg-card);
+        border-radius: var(--radius-lg);
+        border: 2px dashed rgba(255, 255, 255, 0.1);
+    }
+    
+    .empty-icon {
+        font-size: 3rem;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+    
+    .empty-title {
+        font-size: 1.25rem;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+    }
+    
+    .empty-description {
+        color: var(--text-secondary);
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    
+    /* Футер */
+    .footer {
+        text-align: center;
+        padding: 32px 0;
+        margin-top: 48px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+    
+    /* Анимации */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .game-card {
+        animation: fadeIn 0.5s ease-out;
+    }
+    
+    /* Уведомления */
+    .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: var(--bg-card);
+        color: var(--text-primary);
+        padding: 12px 24px;
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 1000;
+        transition: transform 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        max-width: 90%;
+    }
+    
+    .toast.show {
+        transform: translateX(-50%) translateY(0);
+    }
+    
+    /* Скелетоны для загрузки */
+    .skeleton {
+        background: linear-gradient(90deg, #2d3748 25%, #4a5568 50%, #2d3748 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+        border-radius: var(--radius-md);
+    }
+    
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+</style>
 </head>
-
 <body>
-  <div class="wrap">
-    <div class="top">
-      <div class="brand">
-        <h1>FreeRedeemGames</h1>
-        <p>
-          Автоматическая лента раздач: 🎮 Steam · 🟦 Epic · 🟪 GOG · 🟨 Prime.
-          Steam ~ каждые {{ steam_min }} мин, Epic ~ каждые {{ epic_min }} мин.
-          Free weekend показываем отдельно.
-        </p>
-
-        <div class="chips">
-          <span class="chip"><strong>Режим:</strong>
-            {% if show_expired %}
-              Актуальные + истёкшие за 7 дней
-            {% else %}
-              Только актуальные
-            {% endif %}
-          </span>
-          <span class="chip"><strong>Фильтр:</strong>
-            {% if store == "all" %}Все{% else %}{{ store|upper }}{% endif %}
-          </span>
-        </div>
-      </div>
-
-      <div class="controls">
-        {% set base = "/?show_expired=" ~ show_expired ~ "&store=" ~ store %}
-                {% set base_kind = base %}
-<div class="seg" title="Фильтр по типу раздачи">
-  {% if kind == "all" %}<span class="on">Все</span>{% else %}<a href="{{ base_kind }}&kind=all">Все</a>{% endif %}
-  {% if kind == "keep" %}<span class="on">🎁 Навсегда</span>{% else %}<a href="{{ base_kind }}&kind=keep">🎁 Навсегда</a>{% endif %}
-  {% if kind == "weekend" %}<span class="on">⏱ Временно</span>{% else %}<a href="{{ base_kind }}&kind=weekend">⏱ Временно</a>{% endif %}
-  {% if kind == "deals" %}<span class="on">💸 Deals 70%+</span>{% else %}<a href="{{ base_kind }}&kind=deals">💸 Deals 70%+</a>{% endif %}
-  {% if kind == "free" %}<span class="on">🔥 Бесплатные</span>{% else %}<a href="{{ base_kind }}&kind=free">🔥 Бесплатные</a>{% endif %}
-</div>
-        <div class="seg" title="Фильтр по магазину">
-          {% if store == "all" %}<span class="on">Все</span>{% else %}<a href="{{ base }}&store=all">Все</a>{% endif %}
-          {% if store == "steam" %}<span class="on">🎮 Steam</span>{% else %}<a href="{{ base }}&store=steam">🎮 Steam</a>{% endif %}
-          {% if store == "epic" %}<span class="on">🟦 Epic</span>{% else %}<a href="{{ base }}&store=epic">🟦 Epic</a>{% endif %}
-          {% if store == "gog" %}<span class="on">🟪 GOG</span>{% else %}<a href="{{ base }}&store=gog">🟪 GOG</a>{% endif %}
-          {% if store == "prime" %}<span class="on">🟨 Prime</span>{% else %}<a href="{{ base }}&store=prime">🟨 Prime</a>{% endif %}
-        </div>
-
-        <div class="seg" title="Показывать истёкшие за 7 дней">
-          {% if show_expired %}
-            <a href="/?show_expired=0&store={{ store }}">✅ Только актуальные</a>
-            <span class="on">Истёкшие за 7 дней</span>
-          {% else %}
-            <span class="on">✅ Только актуальные</span>
-            <a href="/?show_expired=1&store={{ store }}">Истёкшие за 7 дней</a>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-                {% if kind in ["all", "keep"] %}
-    <div class="section">
-      <h2>🆓 Free to keep</h2>
-      {% if keep|length == 0 %}
-        <div class="empty">Пока нет подходящих раздач под текущий фильтр.</div>
-      {% else %}
-        <div class="grid">
-          {% for d in keep %}
-          <div class="card">
-            <div class="thumb">
-              {% if d["image"] %}
-                <img src="{{ d["image"] }}" alt="cover"
-     onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
-     data-fallback="{{ d.get('image_fallback','') }}"/>
-              {% else %}
-                <div class="ph">Нет обложки</div>
-              {% endif %}
+    <div class="header">
+        <div class="container">
+            <div class="brand">
+                <h1>🎮 Free Game Deals</h1>
+                <p>Автоматический сборник бесплатных игр со Steam, Epic Games, GOG и Prime Gaming. Обновляется каждые {{ steam_min }} минут.</p>
             </div>
-            <div class="body">
-              <div class="row1">
-                <span class="badge">{{ d["store_badge"] }}</span>
-                <span class="meta">
-                <span class="pill ok">FREE</span>
-  {% if d["is_new"] %}
-    <span class="pill ok">🆕 NEW</span>
-  {% endif %}
-  {% if d["expired"] %}
-    <span class="pill exp">❌ истекло</span>
-  {% else %}
-    <span class="pill ok">✅ актуально</span>
-  {% endif %}
-</span>
-              </div>
-              <div class="title">{{ d["title"] }}</div>
-              <div class="row1">
-                <span class="pill">⏳ До: {{ d["ends_at_fmt"] }}</span>
-                {% if d["time_left"] and not d["expired"] %}
-                  <span class="pill ok">⏱ {{ d["time_left"] }}</span>
-                {% endif %}
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <i class="fas fa-gamepad"></i>
+                    <div>
+                        <div class="stat-value">{{ total_games }}</div>
+                        <div class="stat-label">Всего игр</div>
+                    </div>
                 </div>
-              <div class="actions" style="margin-top:10px;">
-                <a class="btn primary" href="{{ d["url"] }}" target="_blank">Открыть</a>
-                <button class="btn copy" data-url="{{ d["url"] }}">Копировать ссылку</button>
-              </div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    </div>
-                {% endif %}
-
-{% if kind in ["all", "weekend"] %}
-    <div class="section">
-      <h2>⏱ Free weekend / временно</h2>
-      {% if weekend|length == 0 %}
-        <div class="empty">Пока нет активных временных акций под текущий фильтр.</div>
-      {% else %}
-        <div class="grid">
-          {% for d in weekend %}
-          <div class="card">
-            <div class="thumb">
-  {% if d["image"] %}
-    <img src="{{ d["image"] }}" alt="cover"
-         onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
-         data-fallback="{{ d.get('image_fallback','') }}"/>
-  {% else %}
-    <div class="ph">Нет обложки</div>
-  {% endif %}
-</div>
-            </div>
-            <div class="body">
-              <div class="row1">
-                <span class="badge">{{ d["store_badge"] }}</span>
-                <span class="meta">
-                <span class="pill ok">FREE WEEKEND</span>
-  {% if d["is_new"] %}
-    <span class="pill ok">🆕 NEW</span>
-  {% endif %}
-  {% if d["expired"] %}
-    <span class="pill exp">❌ истекло</span>
-  {% else %}
-    <span class="pill ok">✅ актуально</span>
-  {% endif %}
-</span>
-              </div>
-              <div class="title">{{ d["title"] }}</div>
-              <div class="row1">
-                <span class="pill">⏳ До: {{ d["ends_at_fmt"] }}</span>
-                {% if d["time_left"] and not d["expired"] %}
-                  <span class="pill ok">⏱ {{ d["time_left"] }}</span>
-                {% endif %}
-              </div>
-              <div class="actions" style="margin-top:10px;">
-                <a class="btn primary" href="{{ d["url"] }}" target="_blank">Открыть</a>
-              <button class="btn copy" data-url="{{ d["url"] }}">Копировать ссылку</button>
+                <div class="stat-item">
+                    <i class="fas fa-bolt"></i>
+                    <div>
+                        <div class="stat-value">{{ new_today }}</div>
+                        <div class="stat-label">Новых сегодня</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-clock"></i>
+                    <div>
+                        <div class="stat-value">{{ expiring_soon }}</div>
+                        <div class="stat-label">Скоро истекает</div>
+                    </div>
                 </div>
             </div>
-          </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-     </div>
-          {% endif %}
-
-{% if kind in ["all", "deals"] %}
-<div class="section">
-                
-
-  <h2>💸 Hot deals 70%+</h2>
-  {% if hot|length == 0 %}
-    <div class="empty">Пока нет подходящих скидок под текущий фильтр.</div>
-  {% else %}
-    <div class="grid">
-      {% for d in hot %}
-      <div class="card">
-        <div class="thumb">
-  {% if d["image"] %}
-    <img 
-      src="{{ d['image'] }}" 
-      alt="{{ d['title'] }}"
-      loading="lazy"
-      onerror="
-        console.log('Image failed:', this.src);
-        this.src = 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 300 140\"%3E%3Crect width=\"300\" height=\"140\" fill=\"%230f1730\"/%3E%3Ctext x=\"150\" y=\"75\" font-size=\"14\" text-anchor=\"middle\" fill=\"%2399a3cc\"%3E{{ d['title'][:30] }}%3C/text%3E%3C/svg%3E';
-        this.onerror = null;
-      "
-    />
-  {% else %}
-    <div class="ph">Нет обложки</div>
-  {% endif %}
-</div>
-        <div class="body">
-          <div class="row1">
-            <span class="badge">{{ d["store_badge"] }}</span>
-            <span class="meta">
-              {% if d["discount_pct"] %}
-                <span class="pill ok">💸 -{{ d["discount_pct"] }}%</span>
-              {% endif %}
-              {% if d["is_new"] %}
-                <span class="pill ok">🆕 NEW</span>
-              {% endif %}
-            </span>
-          </div>
-
-          <div class="title">{{ d["title"] }}</div>
-
-          <div class="row1">
-            {% if d["ends_at_fmt"] %}
-              <span class="pill">⏳ До: {{ d["ends_at_fmt"] }}</span>
-            {% endif %}
-            {% if d["time_left"] and not d["expired"] %}
-              <span class="pill ok">⏱ {{ d["time_left"] }}</span>
-            {% endif %}
-          </div>
-
-          <div class="actions" style="margin-top:10px;">
-            <a class="btn primary" href="{{ d["url"] }}" target="_blank">Открыть</a>
-            <button class="btn copy" data-url="{{ d["url"] }}">Копировать ссылку</button>
-          </div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-</div>
-{% endif %}
-
-                {% if kind in ["all", "free"] %}
-<div class="section">
-                
-
-
-  <h2>🔥 Популярные бесплатные игры</h2>
-
-  {% if free_games is not defined or free_games|length == 0 %}
-    <div class="empty">Пока список бесплатных игр не заполнен.</div>
-  {% else %}
-    <div class="grid">
-      {% for g in free_games %}
-      <div class="card">
-        <div class="thumb">
-  {% if g["image_url"] %}
-    <img src="{{ g["image_url"] }}" alt="cover"/>
-  {% else %}
-    <div class="ph">Нет обложки</div>
-  {% endif %}
-</div>
-        <div class="body">
-          <div class="row1">
-            <span class="badge">{{ g["store_badge"] }}</span>
-            <span class="meta">
-              <span class="pill ok">FREE TO PLAY</span>
-            </span>
-          </div>
-
-          <div class="title">{{ g["title"] }}</div>
-
-          {% if g["note"] %}
-            <div class="row1">
-              <span class="pill">{{ g["note"] }}</span>
+            
+            <div class="filters">
+                <div class="filter-group">
+                    {% set base_url = "/?store=" + store + "&kind=" + kind %}
+                    
+                    <button class="filter-btn {% if show_expired %}active{% endif %}" 
+                            onclick="window.location.href='/?show_expired={{ 1 if not show_expired else 0 }}&store={{ store }}&kind={{ kind }}'">
+                        <i class="fas fa-{% if show_expired %}eye{% else %}eye-slash{% endif %}"></i>
+                        {{ "Скрыть истекшие" if show_expired else "Показать истекшие" }}
+                    </button>
+                    
+                    <div class="filter-group">
+                        {% for s in ['all', 'steam', 'epic', 'gog', 'prime'] %}
+                        <button class="filter-btn {% if store == s %}active{% endif %}" 
+                                onclick="window.location.href='/?store={{ s }}&kind={{ kind }}{% if show_expired %}&show_expired=1{% endif %}'">
+                            {% if s == 'steam' %}🎮{% elif s == 'epic' %}🟦{% elif s == 'gog' %}🟪{% elif s == 'prime' %}🟨{% else %}📦{% endif %}
+                            {{ 'Все' if s == 'all' else s|upper }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="filter-group">
+                        {% for k, label in [('all', 'Все'), ('keep', '🎁 Навсегда'), ('weekend', '⏱ Временно'), ('deals', '💸 Скидки'), ('free', '🔥 Бесплатные')] %}
+                        <button class="filter-btn {% if kind == k %}active{% endif %}" 
+                                onclick="window.location.href='/?kind={{ k }}&store={{ store }}{% if show_expired %}&show_expired=1{% endif %}'">
+                            {{ label }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
-          {% endif %}
-
-          <div class="actions" style="margin-top:10px;">
-            <a class="btn primary" href="{{ g["url"] }}" target="_blank">Играть</a>
-          </div>
         </div>
-      </div>
-      {% endfor %}
     </div>
-  {% endif %}
-</div>
-{% endif %}
-
-  </div>
-                <div id="toast" class="toast">Ссылка скопирована ✅</div>
-<script>
-(function(){
-  const toast = document.getElementById("toast");
-  let t = null;
-
-  function showToast(msg){
-    if (!toast) return;
-    toast.textContent = msg || "Готово ✅";
-    toast.classList.add("on");
-    clearTimeout(t);
-    t = setTimeout(() => toast.classList.remove("on"), 1200);
-  }
-
-  async function copyText(text){
-    try{
-      await navigator.clipboard.writeText(text);
-      showToast("Ссылка скопирована ✅");
-    }catch(e){
-      // fallback
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      showToast("Ссылка скопирована ✅");
-    }
-  }
-
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".copy");
-    if (!btn) return;
-    e.preventDefault();
-    const url = btn.getAttribute("data-url") || "";
-    if (url) copyText(url);
-  });
-})();
-</script>
-</body>
-</html>
+    
+    <div class="container">
+        {% if kind in ["all", "keep"] and keep|length > 0 %}
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon">🎁</div>
+                <div class="section-title">Бесплатно навсегда</div>
+                <div class="section-count">{{ keep|length }}</div>
+            </div>
+            
+            <div class="games-grid">
+                {% for game in keep %}
+                <div class="game-card">
+                    <div class="store-badge store-{{ game.store }}">
+                        {% if game.store == 'steam' %}🎮 Steam
+                        {% elif game.store == 'epic' %}🟦 Epic
+                        {% elif game.store == 'gog' %}🟪 GOG
+                        {% elif game.store == 'prime' %}🟨 Prime
+                        {% else %}{{ game.store|upper }}{% endif %}
+                    </div>
+                    
+                    <div class="game-image-container">
+                        {% if game.image %}
+                        <img src="{{ game.image }}" 
+                             alt="{{ game.title }}"
+                             class="game-image"
+                             loading="lazy"
+                             onerror="this.onerror=null; this.src='data:image/svg+xml;base64,{{ generate_placeholder(game.title, game.store) }}';">
+                        {% else %}
+                        <div class="image-placeholder">
+                            <i class="fas fa-gamepad"></i>
+                            <span>Изображение игры</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="game-content">
+                        <h3 class="game-title">{{ game.title }}</h3>
+                        
+                        <div class="game-meta">
+                            <span class="meta-tag tag-free">
+                                <i class="fas fa-gift"></i> FREE
+                            </span>
+                            
+                            {% if game.is_new %}
+                            <span class="meta-tag tag-new">
+                                <i class="fas fa-star"></i> NEW
+                            </span>
+                            {% endif %}
+                            
+                            {% if game.expired %}
+                            <span class="meta-tag tag-expired">
+                                <i class="fas fa-clock"></i> Истекло
+                            </span>
+                            {% elif game.time_left and "час" in game.time_left %}
+                            <span class="meta-tag tag-expiring">
+                                <i class="fas fa-exclamation-triangle"></i> {{ game.time_left }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if game.ends_at_fmt and not game.expired %}
+                        <div class="game-timer">
+                            <div class="timer-icon">
+                                <i class="fas fa-hourglass-half"></i>
+                            </div>
+                            <div class="timer-text">
+                                До: {{ game.ends_at_fmt }}
+                            </div>
+                            {% if game.time_left %}
+                            <div class="timer-time">
+                                {{ game.time_left }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="game-actions">
+                            <a href="{{ game.url }}" target="_blank" class="btn btn-primary">
+                                <i class="fas fa-external-link-alt"></i>
+                                Открыть в магазине
+                            </a>
+                            <button class="btn btn-secondary copy-btn" data-url="{{ game.url }}">
+                                <i class="fas fa-copy"></i>
+                                Копировать
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if kind in ["all", "weekend"] and weekend|length > 0 %}
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon">⏱</div>
+                <div class="section-title">Free Weekend / Временно</div>
+                <div class="section-count">{{ weekend|length }}</div>
+            </div>
+            
+            <div class="games-grid">
+                {% for game in weekend %}
+                <div class="game-card">
+                    <div class="store-badge store-{{ game.store }}">
+                        {% if game.store == 'steam' %}🎮 Steam
+                        {% elif game.store == 'epic' %}🟦 Epic
+                        {% elif game.store == 'gog' %}🟪 GOG
+                        {% elif game.store == 'prime' %}🟨 Prime
+                        {% else %}{{ game.store|upper }}{% endif %}
+                    </div>
+                    
+                    <div class="game-image-container">
+                        {% if game.image %}
+                        <img src="{{ game.image }}" 
+                             alt="{{ game.title }}"
+                             class="game-image"
+                             loading="lazy"
+                             onerror="this.onerror=null; this.src='data:image/svg+xml;base64,{{ generate_placeholder(game.title, game.store) }}';">
+                        {% else %}
+                        <div class="image-placeholder">
+                            <i class="fas fa-gamepad"></i>
+                            <span>Изображение игры</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="game-content">
+                        <h3 class="game-title">{{ game.title }}</h3>
+                        
+                        <div class="game-meta">
+                            <span class="meta-tag">
+                                <i class="fas fa-clock"></i> FREE WEEKEND
+                            </span>
+                            
+                            {% if game.is_new %}
+                            <span class="meta-tag tag-new">
+                                <i class="fas fa-star"></i> NEW
+                            </span>
+                            {% endif %}
+                            
+                            {% if game.expired %}
+                            <span class="meta-tag tag-expired">
+                                <i class="fas fa-times"></i> Истекло
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if game.ends_at_fmt and not game.expired %}
+                        <div class="game-timer">
+                            <div class="timer-icon">
+                                <i class="fas fa-hourglass-end"></i>
+                            </div>
+                            <div class="timer-text">
+                                До: {{ game.ends_at_fmt }}
+                            </div>
+                            {% if game.time_left %}
+                            <div class="timer-time">
+                                {{ game.time_left }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="game-actions">
+                            <a href="{{ game.url }}" target="_blank" class="btn btn-primary">
+                                <i class="fas fa-play-circle"></i>
+                                Играть бесплатно
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if kind in ["all", "deals"] and hot|length > 0 %}
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon">💸</div>
+                <div class="section-title">Горячие скидки 70%+</div>
+                <div class="section-count">{{ hot|length }}</div>
+            </div>
+            
+            <div class="games-grid">
+                {% for game in hot %}
+                <div class="game-card">
+                    <div class="store-badge store-{{ game.store }}">
+                        {% if game.store == 'steam' %}🎮 Steam
+                        {% elif game.store == 'epic' %}🟦 Epic
+                        {% elif game.store == 'gog' %}🟪 GOG
+                        {% elif game.store == 'prime' %}🟨 Prime
+                        {% else %}{{ game.store|upper }}{% endif %}
+                    </div>
+                    
+                    <div class="game-image-container">
+                        {% if game.image %}
+                        <img src="{{ game.image }}" 
+                             alt="{{ game.title }}"
+                             class="game-image"
+                             loading="lazy"
+                             onerror="this.onerror=null; this.src='data:image/svg+xml;base64,{{ generate_placeholder(game.title, game.store) }}';">
+                        {% else %}
+                        <div class="image-placeholder">
+                            <i class="fas fa-gamepad"></i>
+                            <span>Изображение игры</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="game-content">
+                        <h3 class="game-title">{{ game.title }}</h3>
+                        
+                        <div class="game-meta">
+                            {% if game.discount_pct %}
+                            <span class="meta-tag" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">
+                                <i class="fas fa-fire"></i> -{{ game.discount_pct }}%
+                            </span>
+                            {% endif %}
+                            
+                            {% if game.is_new %}
+                            <span class="meta-tag tag-new">
+                                <i class="fas fa-star"></i> NEW
+                            </span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if game.price_new and game.price_old %}
+                        <div class="game-timer">
+                            <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                <span style="text-decoration: line-through; color: var(--text-muted);">
+                                    {{ "%.2f"|format(game.price_old) }} {{ game.currency|default('USD') }}
+                                </span>
+                                <span style="font-weight: bold; color: var(--status-new);">
+                                    {{ "%.2f"|format(game.price_new) }} {{ game.currency|default('USD') }}
+                                </span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="game-actions">
+                            <a href="{{ game.url }}" target="_blank" class="btn btn-primary">
+                                <i class="fas fa-shopping-cart"></i>
+                                Купить со скидкой
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if (keep|length == 0 and weekend|length == 0 and hot|length == 0) %}
+        <div class="empty-state">
+            <div class="empty-icon">🎮</div>
+            <div class="empty-title">Игры не найдены</div>
+            <div class="empty-description
 """)
 
 
