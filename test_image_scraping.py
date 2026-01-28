@@ -40,11 +40,11 @@ def test_steam_image(app_id):
 
 # Тестируем популярные игры
 test_games = [
-    ("730", "Counter-Strike 2"),
-    ("570", "Dota 2"),
-    ("578080", "PUBG"),
-    ("1172470", "Apex Legends"),
-    ("1091500", "Cyberpunk 2077"),
+    ("3660810", "ROOM FOOTBALL - Abandoned Factory"),
+    ("3716310", "Runeblade Automaton"),
+    ("3703970", "Extraordinary Ball"),
+    ("3688480", "Canyon of Outlaws"),
+    ("3660800", "3D PUZZLE - Race Track"),
 ]
 
 for app_id, name in test_games:
