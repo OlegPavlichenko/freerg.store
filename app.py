@@ -272,38 +272,29 @@ def steam_header_image_from_url_fast(url: str) -> str | None:
         return None
     return f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg"
 
-def steam_image_candidates(appid: str) -> list[str]:
-    if not appid:
+def steam_header_candidates(app_id: str) -> list[str]:
+    """
+    Возвращает список URL-ов обложек Steam в порядке приоритета.
+    
+    Новые игры используют формат с хешем:
+    https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{app_id}/{hash}/header.jpg
+    
+    Но есть стабильные альтернативы без хеша, которые работают для большинства игр.
+    """
+    if not app_id:
         return []
     return [
-        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
-        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_600x900.jpg",
-        f"https://shared.akamai.steamstatic.com/steam/apps/{appid}/header.jpg",
-        f"https://shared.fastly.steamstatic.com/steam/apps/{appid}/header.jpg",
+        # Старые стабильные CDN (работают для ~95% игр)
+        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg",
+        f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
+        
+        # Capsule изображения (часто работают когда header не доступен)
+        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/capsule_616x353.jpg",
+        f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/capsule_616x353.jpg",
+        
+        # Library header (другой формат, но тоже работает)
+        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/library_600x900.jpg",
     ]
-
-def steam_header_candidates(appid: str) -> list[str]:
-    # совместимость со старым кодом
-    return steam_image_candidates(appid)
-
-
-def images_for_row(row_store: str | None, url: str, image_url: str | None):
-    st = (row_store or "").strip().lower()
-
-    # 1) если картинка уже есть в БД (Epic / или Steam если сохранили) — используем её
-    if image_url:
-        return image_url, "" , ""  # main, fb1, fb2
-
-    # 2) Steam — строим кандидаты
-    if st == "steam":
-        appid = extract_steam_app_id_fast(url)
-        c = steam_image_candidates(appid) if appid else []
-        main = c[0] if len(c) > 0 else ""
-        fb1  = c[1] if len(c) > 1 else ""
-        fb2  = c[2] if len(c) > 2 else ""
-        return main, fb1, fb2
-
-    return "", "", ""
 
 
 def resolve_steam_app_id(url: str) -> str | None:
@@ -344,6 +335,41 @@ def resolve_steam_app_id_slow(url: str) -> str | None:
     try:
         resp = requests.get(url, timeout=10, allow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
         return extract_steam_app_id_fast(str(resp.url))
+    except Exception:
+        return None
+
+
+def get_steam_header_with_hash(app_id: str, url: str = None) -> str | None:
+    """
+    Пытается получить новый URL с хешем для игры.
+    Использует запрос к странице игры (медленно!).
+    Используй только для критически важных случаев.
+    """
+    if not app_id:
+        return None
+    
+    try:
+        page_url = url or f"https://store.steampowered.com/app/{app_id}/"
+        resp = requests.get(
+            page_url,
+            timeout=10,
+            allow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        
+        html = resp.text
+        
+        # Ищем новый формат с хешем
+        # Паттерн: shared.*.steamstatic.com/store_item_assets/steam/apps/{app_id}/{hash}/
+        pattern = rf'shared\.(?:fastly|akamai)\.steamstatic\.com/store_item_assets/steam/apps/{app_id}/([a-f0-9]+)/'
+        match = re.search(pattern, html)
+        
+        if match:
+            hash_value = match.group(1)
+            return f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{app_id}/{hash_value}/header.jpg"
+        
+        return None
+        
     except Exception:
         return None
 
@@ -604,9 +630,10 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
     seen_urls = set()
 
     slow_left = 40  # ⭐ увеличен лимит для лучшего покрытия
+    hash_attempts = 5  # попыток получить хеш для новых игр
 
     def add_item(it: dict, deal: dict, cut: int, url: str) -> None:
-        nonlocal slow_left, out, seen_urls
+        nonlocal slow_left, hash_attempts, out, seen_urls
 
         title = it.get("title") or it.get("name") or deal.get("title") or deal.get("name") or "Steam deal"
 
@@ -640,8 +667,21 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
         app_id = app_id or ""
         
         # формируем картинку
-        cands = steam_header_candidates(app_id) if app_id else []
-        image_url = cands[1] if len(cands) > 1 else (cands[0] if cands else None)
+        image_url = None
+        if app_id:
+            cands = steam_header_candidates(app_id)
+            # Используем первый стабильный URL (cloudflare header)
+            image_url = cands[0] if cands else None
+            
+            # Для первых нескольких игр пробуем получить URL с хешем
+            if hash_attempts > 0:
+                hash_attempts -= 1
+                try:
+                    hash_url = get_steam_header_with_hash(app_id, url)
+                    if hash_url:
+                        image_url = hash_url  # приоритет новому формату
+                except Exception:
+                    pass
 
         out.append({
             "store": "steam",
@@ -1420,18 +1460,10 @@ button.btn{font-family: inherit}
       <div class="card">
         <div class="thumb">
   {% if d["image"] %}
-    <img
-   src="{{ d['image'] }}"
-  alt=""
-  loading="lazy"
-  referrerpolicy="no-referrer"
-  data-fallback="{{ d.get('image_fallback','') }}"
-  data-fallback2="{{ d.get('image_fallback2','') }}"
-  onerror="
-    if(!this.dataset.try1){ this.dataset.try1=1; if(this.dataset.fallback){ this.src=this.dataset.fallback; return; } }
-    if(!this.dataset.try2){ this.dataset.try2=1; if(this.dataset.fallback2){ this.src=this.dataset.fallback2; return; } }
-    this.remove();">
-    {% else %}
+    <img src="{{ d["image"] }}" alt="cover"
+         onerror="this.onerror=null; this.src=this.dataset.fallback || '';"
+         data-fallback="{{ d.get('image_fallback','') }}"/>
+  {% else %}
     <div class="ph">Нет обложки</div>
   {% endif %}
 </div>
@@ -1558,20 +1590,6 @@ button.btn{font-family: inherit}
   });
 })();
 </script>
-                <script>
-document.addEventListener("error", function(e){
-  const img = e.target;
-  if(img && img.tagName === "IMG" && img.parentElement && img.parentElement.classList.contains("thumb")){
-    // если img удалился — покажем "Нет обложки"
-    if(!img.isConnected){
-      const ph = document.createElement("div");
-      ph.className = "ph";
-      ph.textContent = "Нет обложки";
-      img.parentElement.appendChild(ph);
-    }
-  }
-}, true);
-</script>
 </body>
 </html>
 """)
@@ -1637,19 +1655,46 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             return True
         return (row_store or "").strip().lower() == store
 
+    def images_for_row(row_store: str | None, url: str, image_url: str | None):
+        """⭐ Улучшенная логика с фоллбэками для обложек"""
+        st = (row_store or "").strip().lower()
+        
+        # Если в БД уже есть картинка — используем её как основную
+        if image_url:
+            # Для Steam добавляем фоллбэки
+            if st == "steam":
+                appid = extract_steam_app_id_fast(url)
+                if appid:
+                    cands = steam_header_candidates(appid)
+                    # Первый фоллбэк — capsule (другой формат)
+                    fallback = cands[2] if len(cands) > 2 else ""
+                    return image_url, fallback
+            return image_url, ""
+        
+        # Для Steam генерируем список кандидатов
+        if st == "steam":
+            appid = extract_steam_app_id_fast(url)
+            if appid:
+                cands = steam_header_candidates(appid)
+                main = cands[0] if cands else ""  # cloudflare header
+                fb = cands[2] if len(cands) > 2 else ""  # capsule как фоллбэк
+                return main, fb
+        
+        return "", ""
+
     # keep
     keep = []
     for r in keep_rows:
         if not (allow_time(r[4]) and allow_store(r[0])):
             continue
-        img_main, img_fb1, img_fb2 = images_for_row(r[0], r[2], r[3])
+        img_main, img_fb = images_for_row(r[0], r[2], r[3])
 
         keep.append({
             "store_badge": store_badge(r[0]),
             "title": r[1],
             "url": r[2],
             "image": img_main,
-            "image_fallback": img_fb1,
+            "image_fallback": img_fb,
             "ends_at": r[4],
             "is_new": is_new(r[5]),
             "ends_at_fmt": format_expiry(r[4]),
@@ -1663,14 +1708,14 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     for r in weekend_rows:
         if not (allow_time(r[4]) and allow_store(r[0])):
             continue
-        img_main, img_fb1, img_fb2 = images_for_row(r[0], r[2], r[3])
+        img_main, img_fb = images_for_row(r[0], r[2], r[3])
 
         weekend.append({
             "store_badge": store_badge(r[0]),
             "title": r[1],
             "url": r[2],
             "image": img_main,
-            "image_fallback": img_fb1,
+            "image_fallback": img_fb,
             "ends_at": r[4],
             "is_new": is_new(r[5]),
             "ends_at_fmt": format_expiry(r[4]),
@@ -1684,15 +1729,14 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     for r in hot_rows:
         if not allow_store(r[0]):
             continue
-        img_main, img_fb1, img_fb2 = images_for_row(r[0], r[2], r[3])
+        img_main, img_fb = images_for_row(r[0], r[2], r[3])
 
         hot.append({
             "store_badge": store_badge(r[0]),
             "title": r[1],
             "url": r[2],
             "image": img_main,
-            "image_fallback": img_fb1,
-            "image_fallback2": img_fb2,
+            "image_fallback": img_fb,
             "ends_at": r[4],
             "is_new": is_new(r[5]),
             "ends_at_fmt": format_expiry(r[4]),
