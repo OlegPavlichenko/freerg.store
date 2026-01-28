@@ -1,56 +1,72 @@
 #!/usr/bin/env python3
 """
-Тестируем конкретные игры
+Тестируем получение изображений Steam в новом формате
 """
 
 import requests
+import re
 
-def test_steam_image(app_id):
-    """Тестируем разные CDN для одного app_id"""
-    urls = [
-        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/header.jpg",
-        f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
-        f"https://steamcdn-a.akamaihd.net/steam/apps/{app_id}/header.jpg",
-        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/capsule_616x353.jpg",
-        f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/capsule_231x87.jpg",
-        f"https://cdn.cloudflare.steamstatic.com/steam/apps/{app_id}/library_600x900.jpg",
+def test_new_steam_images():
+    """Тестируем новые игры Steam"""
+    
+    test_cases = [
+        ("3660800", "3D PUZZLE - Race Track"),
+        ("3660810", "ROOM FOOTBALL - Abandoned Factory"),
+        ("730", "Counter-Strike 2 (старая игра для сравнения)"),
     ]
     
-    print(f"\nТестируем игру AppID: {app_id}")
-    print("-" * 50)
-    
-    for url in urls:
-        try:
-            resp = requests.head(url, timeout=5, allow_redirects=True)
-            status = resp.status_code
-            content_type = resp.headers.get('Content-Type', '')
+    for app_id, name in test_cases:
+        print(f"\n🎮 Тестируем: {name} (AppID: {app_id})")
+        print("-" * 50)
+        
+        # Пробуем получить изображения через парсинг
+        images = get_steam_images_from_page_new(app_id)
+        
+        if images.get('all'):
+            print(f"✅ Найдено {len(images['all'])} изображений:")
+            for i, img_url in enumerate(images['all'][:3]):  # Показываем первые 3
+                print(f"  {i+1}. {img_url[:80]}...")
             
-            if status == 200 and ('image' in content_type or 'jpeg' in content_type):
-                print(f"✅ {url}")
-                print(f"   Status: {status}, Type: {content_type}")
-                return url  # Возвращаем первый рабочий
-            else:
-                print(f"❌ {url}")
-                print(f"   Status: {status}, Type: {content_type}")
-        except Exception as e:
-            print(f"❌ {url}")
-            print(f"   Error: {e}")
-    
-    return None
+            if images.get('header'):
+                print(f"\n📸 Основное изображение: {images['header'][:80]}...")
+                
+                # Проверяем доступность
+                try:
+                    resp = requests.head(images['header'], timeout=5)
+                    print(f"   Статус: {resp.status_code}")
+                except Exception as e:
+                    print(f"   Ошибка: {e}")
+        else:
+            print(f"❌ Изображения не найдены")
 
-# Тестируем популярные игры
-test_games = [
-    ("3660810", "ROOM FOOTBALL - Abandoned Factory"),
-    ("3716310", "Runeblade Automaton"),
-    ("3703970", "Extraordinary Ball"),
-    ("3688480", "Canyon of Outlaws"),
-    ("3660800", "3D PUZZLE - Race Track"),
-]
+def get_steam_images_from_page_new(app_id: str):
+    """Упрощенная версия для теста"""
+    try:
+        url = f"https://store.steampowered.com/app/{app_id}/"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Cookie': 'birthtime=0; mature_content=1; wants_mature_content=1',
+        }
+        
+        resp = requests.get(url, headers=headers, timeout=10)
+        html = resp.text
+        
+        # Ищем новый формат с хешами
+        pattern = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{40}}/[^"\'\s<>]+?\.jpg[^"\'\s<>]*)'
+        matches = re.findall(pattern, html)
+        
+        result = {'all': list(set(matches))}  # Убираем дубли
+        
+        # Определяем типы изображений
+        for img in result['all']:
+            if 'header.jpg' in img and not result.get('header'):
+                result['header'] = img
+        
+        return result
+        
+    except Exception as e:
+        print(f"Ошибка: {e}")
+        return {'all': []}
 
-for app_id, name in test_games:
-    working_url = test_steam_image(app_id)
-    if working_url:
-        print(f"\n🎮 {name}: Используем {working_url}")
-    else:
-        print(f"\n🎮 {name}: Ни один URL не работает")
-    print("=" * 60)
+if __name__ == "__main__":
+    test_new_steam_images()
