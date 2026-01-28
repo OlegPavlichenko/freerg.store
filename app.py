@@ -1637,26 +1637,6 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             return True
         return (row_store or "").strip().lower() == store
 
-    def images_for_row(row_store: str | None, url: str, image_url: str | None):
-     """Всегда отдаёт 3 значения: main, fb1, fb2"""
-    st = (row_store or "").strip().lower()
-
-    # если в БД уже есть картинка — используем её
-    if image_url:
-        return image_url, "", ""
-
-    if st == "steam":
-        appid = extract_steam_app_id_fast(url)
-        if not appid:
-            return "", "", ""
-        c = steam_image_candidates(appid)  # <— ниже дам правильную функцию
-        main = c[0] if len(c) > 0 else ""
-        fb1  = c[1] if len(c) > 1 else ""
-        fb2  = c[2] if len(c) > 2 else ""
-        return main, fb1, fb2
-
-    return "", "", ""
-
     # keep
     keep = []
     for r in keep_rows:
