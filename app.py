@@ -255,20 +255,26 @@ def cleanup_expired(keep_days: int = 7) -> int:
 # Steam image helpers
 # --------------------
 def extract_steam_app_id_fast(url: str) -> str | None:
-    """Быстро извлекает app_id из любого URL где есть /app/"""
+    """Извлекает app_id ЛЮБЫМ способом"""
     if not url:
         return None
     
-    # Ищем /app/123456 в любом месте URL
     import re
+    
+    # 1. Прямой Steam URL: /app/123456
     match = re.search(r'/app/(\d+)', url)
     if match:
         return match.group(1)
     
-    # Также пробуем store.steampowered.com/app/
-    match = re.search(r'store\.steampowered\.com/app/(\d+)', url)
+    # 2. Из image_url если он есть в кэше или параметрах
+    # Пример: если URL содержит ?appid=123456
+    match = re.search(r'[?&]appid=(\d+)', url)
     if match:
         return match.group(1)
+    
+    # 3. 🔥 ВАЖНО: Из image_url который УЖЕ в БД!
+    # Вам нужно передать image_url в extract_steam_app_id_fast
+    # ИЛИ изменить логику
     
     return None
 
@@ -1809,50 +1815,52 @@ def store_badge(store: str | None) -> str:
 
 
 def images_for_row(row_store: str | None, url: str, image_url: str | None):
-    """🔥 БЫСТРАЯ функция без HTTP-запросов"""
-    st = (row_store or "").strip().lower()
+    """
+    🔥 ИСПРАВЛЕННАЯ версия - извлекает AppID из image_url!
+    """
+    st = (str(row_store) or "").strip().lower()
     
-    # 1. Если в БД уже есть картинка - используем её
-    if image_url and image_url.strip():
-        return image_url, ""
+    # 1. Если в БД уже есть image_url - ВОЗВРАЩАЕМ ЕГО!
+    if image_url and str(image_url).strip():
+        return str(image_url), ""
     
-    # 2. Для Steam генерируем URL
-    if st == "steam":
-        # Пробуем извлечь AppID разными способами
-        
-        # Способ 1: Из URL (если это уже прямой Steam URL после исправления)
-        appid = extract_steam_app_id_fast(url)
-        
-        # Способ 2: Если не нашли, пробуем получить из БД или другим способом
-        if not appid:
-            # Может быть в БД уже есть image_url с AppID
-            if image_url:
-                # Извлекаем AppID из image_url: https://.../apps/123456/header.jpg
-                import re
-                m = re.search(r'/apps/(\d+)/', image_url)
-                if m:
-                    appid = m.group(1)
-        
-        if appid:
-            # 🔥 БЫСТРО генерируем URL без проверок
-            # Для новых игр (> 10 млн) используем новый формат
-            try:
-                app_num = int(appid)
-                if app_num >= 10000000:  # Новые игры
-                    main = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
-                    fallback = f"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
-                else:  # Старые игры
-                    main = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
-                    fallback = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_616x353.jpg"
-                
-                return main, fallback
-            except:
-                # Если ошибка конвертации
-                main = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
-                fallback = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/capsule_616x353.jpg"
-                return main, fallback
+    # 2. Только для Steam
+    if st != "steam":
+        return "", ""
     
-    # 3. Ничего не нашли
+    # 3. 🔥 КЛЮЧЕВОЕ: Пробуем извлечь AppID из image_url который УЖЕ в БД
+    # Даже если image_url пустой в этом вызове, он может быть в БД
+    import re
+    
+    appid = None
+    
+    # Способ 1: Из image_url (даже если он None в этом вызове)
+    if image_url:
+        match = re.search(r'/apps/(\d+)/', str(image_url))
+        if match:
+            appid = match.group(1)
+    
+    # Способ 2: Из URL (редко работает для itad.link)
+    if not appid:
+        match = re.search(r'/app/(\d+)', str(url))
+        if match:
+            appid = match.group(1)
+    
+    # 4. Если нашли AppID - генерируем URL
+    if appid:
+        # Новый формат для всех игр
+        steam_url = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+        return steam_url, ""
+    
+    # 5. Отчаяние: пробуем извлечь AppID любым способом
+    # Ищем цифры в URL
+    match = re.search(r'(\d{6,})', str(url))
+    if match and len(match.group(1)) >= 6:
+        appid = match.group(1)
+        steam_url = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+        return steam_url, ""
+    
+    # 6. Ничего не нашли
     return "", ""
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
