@@ -1930,7 +1930,7 @@ PAGE = Template("""
                             {% elif game.store == 'epic' %}EPIC
                             {% elif game.store == 'gog' %}GOG
                             {% elif game.store == 'prime' %}PRIME            
-                            {{ game.store|upper }}
+                            {{ game.store|upper }}{% endif %}
                         </div>
                         
                         {% if game.image %}
@@ -1983,7 +1983,7 @@ PAGE = Template("""
                             {% elif game.store == 'epic' %}EPIC
                             {% elif game.store == 'gog' %}GOG
                             {% elif game.store == 'prime' %}PRIME            
-                            {{ game.store|upper }}
+                            {{ game.store|upper }}{% endif %}
                         </div>
                         
                         {% if game.image %}
