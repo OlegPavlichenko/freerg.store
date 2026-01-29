@@ -87,7 +87,7 @@ FREE_GAMES = [
         "store": "steam",
         "title": "Battlefield REDSEC",
         "url": "https://store.steampowered.com/app/3028330/",
-        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/3028330/header.jpg",
+        "image_url": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/3028330/7f156ef258b0b34011363f8da61b7e2a714232c7/header.jpg",
         "note": "Action",
         "sort": 10
     },
