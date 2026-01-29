@@ -1709,6 +1709,15 @@ PAGE = Template("""
             .header-content {
                 padding: 12px 16px;
             }
+                
+            header {
+                transition: transform .22s ease;
+                will-change: transform;
+            }
+                
+            header.hidden {
+                transform: translateY(-100%);
+            }
             
             .brand h1 {
                 font-size: 1.5rem;
@@ -2096,6 +2105,39 @@ PAGE = Template("""
                 behavior: 'smooth'
             });
         }
+    </script>
+    <script>
+        (function(){
+          const header = document.querySelector(".header");
+  if(!header) return;
+
+  let lastY = window.scrollY;
+  let ticking = false;
+
+  function onScroll(){
+    const y = window.scrollY;
+
+    // если почти сверху — всегда показываем
+    if (y < 40){
+      header.classList.remove("hidden");
+      lastY = y;
+      return;
+    }
+
+    // вниз — прячем, вверх — показываем
+    if (y > lastY + 8) header.classList.add("hidden");
+    else if (y < lastY - 8) header.classList.remove("hidden");
+
+    lastY = y;
+  }
+
+  window.addEventListener("scroll", () => {
+    if(!ticking){
+      window.requestAnimationFrame(() => { onScroll(); ticking=false; });
+      ticking=true;
+    }
+  }, {passive:true});
+        })();
     </script>
 </body>
 </html>
