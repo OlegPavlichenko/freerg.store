@@ -421,14 +421,14 @@ def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
         # Пример: https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3660800/f4994d6feded29512ec4467e2fda2decdc79b322/header.jpg
         
         # 1a. Header в новом формате
-        pattern_new_header = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{40}}/header\.jpg[^"\'\s<>]*)'
+        pattern_new_header = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{30,50}}/header\.jpg[^"\'\s<>]*)'
         matches = re.findall(pattern_new_header, html)
         if matches:
             result['header'] = matches[0]
             result['all'].append(matches[0])
         
         # 1b. Capsule в новом формате
-        pattern_new_capsule = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{40}}/capsule_616x353\.jpg[^"\'\s<>]*)'
+        pattern_new_capsule = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{30,50}}/capsule_616x353\.jpg[^"\'\s<>]*)'
         matches = re.findall(pattern_new_capsule, html)
         if matches:
             result['capsule'] = matches[0]
@@ -436,7 +436,7 @@ def get_steam_images_from_page(app_id: str, url: str = None) -> dict:
                 result['all'].append(matches[0])
         
         # 1c. Любые изображения в новом формате
-        pattern_new_any = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{40}}/[^"\'\s<>]+?\.jpg[^"\'\s<>]*)'
+        pattern_new_any = rf'(https://shared\.[^"\'\s<>]+?steamstatic\.com/store_item_assets/steam/apps/{app_id}/[a-f0-9]{{30,50}}/[^"\'\s<>]+?\.jpg[^"\'\s<>]*)'
         matches = re.findall(pattern_new_any, html)
         for img_url in matches[:10]:
             if img_url not in result['all']:
@@ -2211,52 +2211,34 @@ def store_badge(store: str | None) -> str:
 
 
 def images_for_row(row_store: str | None, url: str, image_url: str | None):
-    """
-    🔥 ИСПРАВЛЕННАЯ версия - извлекает AppID из image_url!
-    """
+    """Улучшенная версия - правильно работает с БД и AppID"""
     st = (str(row_store) or "").strip().lower()
     
-    # 1. Если в БД уже есть image_url - ВОЗВРАЩАЕМ ЕГО!
+    # 1. Если есть image_url в БД - используем его!
     if image_url and str(image_url).strip():
         return str(image_url), ""
     
-    # 2. Только для Steam
+    # 2. Только для Steam пытаемся сгенерировать
     if st != "steam":
         return "", ""
     
-    # 3. 🔥 КЛЮЧЕВОЕ: Пробуем извлечь AppID из image_url который УЖЕ в БД
-    # Даже если image_url пустой в этом вызове, он может быть в БД
+    # 3. Извлекаем AppID из URL
     import re
-    
     appid = None
     
-    # Способ 1: Из image_url (даже если он None в этом вызове)
-    if image_url:
-        match = re.search(r'/apps/(\d+)/', str(image_url))
-        if match:
-            appid = match.group(1)
-    
-    # Способ 2: Из URL (редко работает для itad.link)
-    if not appid:
-        match = re.search(r'/app/(\d+)', str(url))
-        if match:
-            appid = match.group(1)
-    
-    # 4. Если нашли AppID - генерируем URL
-    if appid:
-        # Новый формат для всех игр
-        steam_url = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
-        return steam_url, ""
-    
-    # 5. Отчаяние: пробуем извлечь AppID любым способом
-    # Ищем цифры в URL
-    match = re.search(r'(\d{6,})', str(url))
-    if match and len(match.group(1)) >= 6:
+    # Из Steam URL
+    match = re.search(r'/app/(\d+)', str(url))
+    if match:
         appid = match.group(1)
-        steam_url = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
-        return steam_url, ""
     
-    # 6. Ничего не нашли
+    # 4. Если нашли AppID - генерируем оба формата
+    if appid:
+        # Новый формат (для игр после 2023)
+        main_url = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+        # Старый формат (фоллбэк)
+        fallback_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
+        return main_url, fallback_url
+    
     return "", ""
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
@@ -2403,17 +2385,27 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             "note": note,
         })
 
+# Подсчитываем статистику
+    total_games = len(keep) + len(weekend) + len(hot)
+    new_today = sum(1 for g in (keep + weekend + hot) if g.get("is_new"))
+    expiring_soon = sum(1 for g in (keep + weekend) if g.get("time_left") and "час" in g.get("time_left", ""))
+    last_update = datetime.now().strftime("%d.%m.%Y %H:%M")
+
     return PAGE.render(
-        keep=keep,
-        weekend=weekend,
-        free_games=free_games,
-        steam_min=STEAM_MIN,
-        epic_min=EPIC_MIN,
-        show_expired=int(show_expired),
-        store=store,
-        kind=kind,
-        hot=hot,
-    )
+    keep=keep,
+    weekend=weekend,
+    hot=hot,
+    steam_min=STEAM_MIN,
+    epic_min=EPIC_MIN,
+    show_expired=int(show_expired),
+    store=store,
+    kind=kind,
+    total_games=total_games,
+    new_today=new_today,
+    expiring_soon=expiring_soon,
+    last_update=last_update,
+    generate_placeholder=lambda t, s: "",
+)
 
 # --------------------
 # API endpoints
