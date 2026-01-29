@@ -2162,7 +2162,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         FROM deals
         WHERE kind='hot_deal'
         ORDER BY RANDOM()
-        LIMIT 15
+        LIMIT 16
     """).fetchall()
 
     free_games_rows = conn.execute("""
