@@ -1724,12 +1724,16 @@ PAGE = Template("""
                 padding: 12px 16px;
             }
                 
-            header {
+            body {
+                transition: padding-top .22s ease
+                }
+                
+            .header {
                 transition: transform .22s ease;
                 will-change: transform;
             }
                 
-            header.hidden {
+            .header.hidden {
                 transform: translateY(-100%);
             }
             
@@ -2123,38 +2127,60 @@ PAGE = Template("""
         }
     </script>
     <script>
-        (function(){
-          const header = document.querySelector(".header");
+(function(){
+  const header = document.querySelector(".header");
   if(!header) return;
 
   let lastY = window.scrollY;
   let ticking = false;
+  let headerHeight = header.offsetHeight;
+
+  // 🔥 ставим корректный padding-top
+  function syncPadding(){
+    headerHeight = header.offsetHeight;
+    document.body.style.paddingTop = headerHeight + "px";
+  }
+
+  syncPadding();
+  window.addEventListener("resize", syncPadding);
 
   function onScroll(){
     const y = window.scrollY;
 
-    // если почти сверху — всегда показываем
-    if (y < 40){
+    // вверху всегда показываем
+    if (y < 30){
       header.classList.remove("hidden");
+      document.body.style.paddingTop = headerHeight + "px";
       lastY = y;
       return;
     }
 
-    // вниз — прячем, вверх — показываем
-    if (y > lastY + 8) header.classList.add("hidden");
-    else if (y < lastY - 8) header.classList.remove("hidden");
+    // вниз — прячем
+    if (y > lastY + 8){
+      header.classList.add("hidden");
+      document.body.style.paddingTop = "0px";
+    }
+    // вверх — показываем
+    else if (y < lastY - 8){
+      header.classList.remove("hidden");
+      document.body.style.paddingTop = headerHeight + "px";
+    }
 
     lastY = y;
   }
 
   window.addEventListener("scroll", () => {
     if(!ticking){
-      window.requestAnimationFrame(() => { onScroll(); ticking=false; });
-      ticking=true;
+      requestAnimationFrame(() => {
+        onScroll();
+        ticking = false;
+      });
+      ticking = true;
     }
-  }, {passive:true});
-        })();
-    </script>
+  }, { passive:true });
+})();
+</script>
+
     <script>
 (function(){
   const btn = document.getElementById("toggleHeader");
