@@ -1282,7 +1282,7 @@ PAGE = Template("""
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎮 Free Redeem Games Store - Бесплатные игры</title>
+    <title>Free Redeem Games Store - Бесплатные игры</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🎮</text></svg>">
     <style>
         :root {

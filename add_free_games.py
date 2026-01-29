@@ -75,41 +75,37 @@ FREE_GAMES = [
         "note": "Sci-Fi MMO",
         "sort": 8
     },
-    
-    # Epic Games
     {
-        "store": "epic",
-        "title": "Fortnite",
-        "url": "https://www.epicgames.com/fortnite/",
-        "image_url": "https://cdn2.unrealengine.com/26br-s26-egs-launcher-blade-2560x1440-2560x1440-ee49e569e8e2.jpg",
-        "note": "Battle Royale",
+        "store": "steam",
+        "title": "War Thunder",
+        "url": "https://store.steampowered.com/app/236390/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/236390/header.jpg",
+        "note": "Action Simulator MMO",
+        "sort": 9
+    },
+    {
+        "store": "steam",
+        "title": "Battlefield REDSEC",
+        "url": "https://store.steampowered.com/app/3028330/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/3028330/header.jpg",
+        "note": "Action",
         "sort": 10
     },
     {
-        "store": "epic",
-        "title": "Rocket League",
-        "url": "https://www.epicgames.com/store/en-US/p/rocket-league",
-        "image_url": "",
-        "note": "Футбол на машинах",
+        "store": "steam",
+        "title": "VRChat",
+        "url": "https://store.steampowered.com/app/438100/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/438100/header.jpg",
+        "note": "VR MMO",
         "sort": 11
     },
     {
-        "store": "epic",
-        "title": "Fall Guys",
-        "url": "https://www.epicgames.com/store/en-US/p/fall-guys",
-        "image_url": "",
-        "note": "Party game",
+        "store": "steam",
+        "title": "Marvel_Rivals",
+        "url": "https://store.steampowered.com/app/2767030/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/2767030/header.jpg",
+        "note": "Action",
         "sort": 12
-    },
-    
-    # GOG
-    {
-        "store": "gog",
-        "title": "Gwent",
-        "url": "https://www.gog.com/game/gwent_the_witcher_card_game",
-        "image_url": "",
-        "note": "Карточная игра",
-        "sort": 20
     },
 ]
 
