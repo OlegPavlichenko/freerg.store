@@ -1891,7 +1891,7 @@ PAGE = Template("""
                         <h3 class="game-title">{{ game.title }}</h3>
                         
                         <div class="game-meta">
-                            <span class="meta-tag tag-free">FREE</span>
+                            <span class="meta-tag tag-free">FREE GIFT 🎁</span>
                             {% if game.is_new %}
                             <span class="meta-tag tag-new">NEW</span>
                             {% endif %}
@@ -1904,7 +1904,7 @@ PAGE = Template("""
                         {% endif %}
                         
                         <a href="{{ game.url }}" target="_blank" class="btn">
-                            Открыть →
+                            Забрать →
                         </a>
                     </div>
                 </div>
