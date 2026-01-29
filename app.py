@@ -1276,46 +1276,27 @@ def fetch_prime(): return []
 # --------------------
 # WEBSITE
 # --------------------
-"""
-УЛУЧШЕННЫЙ ШАБЛОН ДЛЯ САЙТА
-===========================
-
-Заменить переменную PAGE = Template('''...''') на этот код:
-"""
-
 PAGE = Template("""
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-    <title>🎮 Free Games - Бесплатные игры</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🎮</text></svg>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Free Games</title>
     <style>
         :root {
-            --bg-primary: #0a0e1a;
-            --bg-card: #1a1f36;
-            --text-primary: #e2e8f0;
-            --text-secondary: #94a3b8;
+            --bg: #0a0e1a;
+            --card: #1a1f36;
+            --text: #e2e8f0;
             --accent: #667eea;
-            --radius: 12px;
         }
-        
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
-            padding-top: 60px; /* Место для sticky header */
+            font-family: -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding-top: 60px;
         }
-        
-        /* 🔥 КОМПАКТНЫЙ HEADER */
         .header {
             position: fixed;
             top: 0;
@@ -1323,449 +1304,124 @@ PAGE = Template("""
             right: 0;
             background: rgba(10, 14, 26, 0.95);
             backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
             z-index: 100;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            padding: 12px;
         }
-        
-        .header-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 12px 16px;
-        }
-        
-        .brand {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 8px;
-        }
-        
         .brand h1 {
             font-size: 1.5rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #667eea, #764ba2);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        
-        /* Кнопка открытия фильтров на мобилке */
-        .filter-toggle {
-            display: none;
-            padding: 8px 16px;
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: var(--radius);
-            color: var(--text-primary);
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-        
-        /* Фильтры */
         .filters {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
-            justify-content: center;
-            align-items: center;
+            margin-top: 8px;
         }
-        
         .filter-btn {
             padding: 6px 12px;
-            border-radius: var(--radius);
-            background: var(--bg-card);
-            color: var(--text-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            background: var(--card);
+            color: #94a3b8;
+            border: 1px solid rgba(255,255,255,0.1);
             font-size: 0.85rem;
             cursor: pointer;
-            transition: all 0.2s;
-            white-space: nowrap;
+            text-decoration: none;
         }
-        
-        .filter-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text-primary);
-        }
-        
         .filter-btn.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-color: transparent;
-        }
-        
-        /* Контейнер */
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 16px;
-        }
-        
-        /* Секции */
-        .section {
-            margin-bottom: 32px;
-        }
-        
-        .section-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 16px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .section-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-        }
-        
-        .section-count {
             background: var(--accent);
             color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 600;
         }
-        
-        /* Сетка карточек */
+        .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+        .section { margin-bottom: 32px; }
+        .section-header {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
         .games-grid {
             display: grid;
-            gap: 16px;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
         }
-        
-        /* Карточка игры */
         .game-card {
-            background: var(--bg-card);
-            border-radius: var(--radius);
+            background: var(--card);
+            border-radius: 12px;
             overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.2s;
         }
-        
-        .game-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-        }
-        
-        /* Изображение */
-        .game-image-container {
-            position: relative;
-            height: 140px;
-            overflow: hidden;
-            background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
-        }
-        
+        .game-card:hover { transform: translateY(-4px); }
         .game-image {
             width: 100%;
-            height: 100%;
+            height: 140px;
             object-fit: cover;
-            transition: transform 0.3s;
         }
-        
-        .game-card:hover .game-image {
-            transform: scale(1.05);
-        }
-        
         .image-placeholder {
             width: 100%;
-            height: 100%;
+            height: 140px;
+            background: linear-gradient(135deg, #2d3748, #4a5568);
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            gap: 8px;
+            font-size: 2rem;
         }
-        
-        .store-badge {
-            position: absolute;
-            top: 8px;
-            left: 8px;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(4px);
-        }
-        
-        .store-steam { color: #1b2838; background: rgba(255, 255, 255, 0.9); }
-        .store-epic { color: white; background: rgba(0, 0, 0, 0.8); }
-        .store-gog { color: #863a8a; background: rgba(255, 255, 255, 0.9); }
-        .store-prime { color: #000; background: #ff9900; }
-        
-        /* Контент карточки */
-        .game-content {
-            padding: 12px;
-        }
-        
+        .game-content { padding: 12px; }
         .game-title {
             font-size: 1rem;
             font-weight: 600;
             margin-bottom: 8px;
             line-height: 1.3;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
         }
-        
-        .game-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-bottom: 10px;
-        }
-        
-        .meta-tag {
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.1);
-        }
-        
-        .tag-new { background: rgba(16, 185, 129, 0.2); color: #10b981; }
-        .tag-free { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-        
-        /* Таймер */
-        .game-timer {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 8px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-        
-        .timer-time {
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-        
-        /* Кнопки */
         .btn {
             display: block;
             width: 100%;
             padding: 10px;
-            border-radius: 8px;
-            border: none;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-align: center;
-            font-size: 0.9rem;
-            text-decoration: none;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--accent);
             color: white;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-        
-        /* Пустой стейт */
-        .empty-state {
+            border-radius: 8px;
             text-align: center;
-            padding: 48px 24px;
-            background: var(--bg-card);
-            border-radius: var(--radius);
-            border: 2px dashed rgba(255, 255, 255, 0.1);
+            text-decoration: none;
+            font-weight: 600;
         }
-        
-        /* 📱 МОБИЛЬНАЯ АДАПТАЦИЯ */
         @media (max-width: 768px) {
-            body {
-                padding-top: 110px; /* Больше места для развёрнутого header */
-            }
-            
-            .header-content {
-                padding: 10px 12px;
-            }
-            
-            .brand h1 {
-                font-size: 1.25rem;
-            }
-            
-            .filter-toggle {
-                display: block;
-            }
-            
-            .filters {
-                display: none;
-                margin-top: 8px;
-            }
-            
-            .filters.show {
-                display: flex;
-            }
-            
-            .games-grid {
-                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-                gap: 12px;
-            }
-            
-            .game-image-container {
-                height: 100px;
-            }
-            
-            .game-content {
-                padding: 10px;
-            }
-            
-            .game-title {
-                font-size: 0.9rem;
-            }
-            
-            .section-title {
-                font-size: 1.1rem;
-            }
-        }
-        
-        /* 💻 ДЕСКТОП */
-        @media (min-width: 1024px) {
-            .games-grid {
-                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            }
-        }
-        
-        /* Toast уведомления */
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background: var(--bg-card);
-            padding: 12px 24px;
-            border-radius: var(--radius);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 1000;
-            transition: transform 0.3s;
-        }
-        
-        .toast.show {
-            transform: translateX(-50%) translateY(0);
+            .games-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .game-image, .image-placeholder { height: 100px; }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="header-content">
-            <div class="brand">
-                <h1>🎮 Free Games</h1>
-                <button class="filter-toggle" onclick="toggleFilters()">
-                    Фильтры ▼
-                </button>
-            </div>
-            
-            <div class="filters" id="filters">
-                <button class="filter-btn {% if kind == 'all' %}active{% endif %}" 
-                        onclick="location.href='/?kind=all&store={{ store }}'">
-                    Все
-                </button>
-                <button class="filter-btn {% if kind == 'keep' %}active{% endif %}" 
-                        onclick="location.href='/?kind=keep&store={{ store }}'">
-                    🎁 Навсегда
-                </button>
-                <button class="filter-btn {% if kind == 'weekend' %}active{% endif %}" 
-                        onclick="location.href='/?kind=weekend&store={{ store }}'">
-                    ⏱ Временно
-                </button>
-                <button class="filter-btn {% if kind == 'deals' %}active{% endif %}" 
-                        onclick="location.href='/?kind=deals&store={{ store }}'">
-                    💸 Скидки
-                </button>
-                <button class="filter-btn {% if kind == 'free' %}active{% endif %}" 
-                        onclick="location.href='/?kind=free&store={{ store }}'">
-                    🔥 F2P
-                </button>
-                
-                <span style="width: 8px"></span>
-                
-                <button class="filter-btn {% if store == 'steam' %}active{% endif %}" 
-                        onclick="location.href='/?store=steam&kind={{ kind }}'">
-                    🎮 Steam
-                </button>
-                <button class="filter-btn {% if store == 'epic' %}active{% endif %}" 
-                        onclick="location.href='/?store=epic&kind={{ kind }}'">
-                    🟦 Epic
-                </button>
-                <button class="filter-btn {% if store == 'gog' %}active{% endif %}" 
-                        onclick="location.href='/?store=gog&kind={{ kind }}'">
-                    🟪 GOG
-                </button>
-                <button class="filter-btn {% if store == 'prime' %}active{% endif %}" 
-                        onclick="location.href='/?store=prime&kind={{ kind }}'">
-                    🟨 Prime
-                </button>
-                <button class="filter-btn {% if store == 'all' %}active{% endif %}" 
-                        onclick="location.href='/?store=all&kind={{ kind }}'">
-                    📦 Все
-                </button>
-            </div>
+        <div class="brand"><h1>🎮 Free Games</h1></div>
+        <div class="filters">
+            <a href="/?kind=all&store={{ store }}" class="filter-btn {% if kind == 'all' %}active{% endif %}">Все</a>
+            <a href="/?kind=keep&store={{ store }}" class="filter-btn {% if kind == 'keep' %}active{% endif %}">🎁 Навсегда</a>
+            <a href="/?kind=weekend&store={{ store }}" class="filter-btn {% if kind == 'weekend' %}active{% endif %}">⏱ Временно</a>
+            <a href="/?kind=deals&store={{ store }}" class="filter-btn {% if kind == 'deals' %}active{% endif %}">💸 Скидки</a>
+            <a href="/?kind=free&store={{ store }}" class="filter-btn {% if kind == 'free' %}active{% endif %}">🔥 F2P</a>
+            <a href="/?store=steam&kind={{ kind }}" class="filter-btn {% if store == 'steam' %}active{% endif %}">Steam</a>
+            <a href="/?store=epic&kind={{ kind }}" class="filter-btn {% if store == 'epic' %}active{% endif %}">Epic</a>
+            <a href="/?store=all&kind={{ kind }}" class="filter-btn {% if store == 'all' %}active{% endif %}">Все</a>
         </div>
     </div>
     
     <div class="container">
         {% if kind in ["all", "keep"] and keep|length > 0 %}
         <div class="section">
-            <div class="section-header">
-                <span>🎁</span>
-                <h2 class="section-title">Бесплатно навсегда</h2>
-                <span class="section-count">{{ keep|length }}</span>
-            </div>
-            
+            <div class="section-header"><span>🎁 Бесплатно навсегда ({{ keep|length }})</span></div>
             <div class="games-grid">
-                {% for game in keep %}
+                {% for g in keep %}
                 <div class="game-card">
-                    <div class="game-image-container">
-                        <div class="store-badge store-{{ game.store }}">
-                            {% if game.store == 'steam' %}STEAM
-                            {% elif game.store == 'epic' %}EPIC
-                            {% elif game.store == 'gog' %}GOG
-                            {% elif game.store == 'prime' %}PRIME
-                            {% else %}{{ game.store|upper }}{% endif %}
-                        </div>
-                        
-                        {% if game.image %}
-                        <img src="{{ game.image }}" 
-                             alt="{{ game.title }}"
-                             class="game-image"
-                             loading="lazy"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                        {% endif %}
-                        <div class="image-placeholder" style="{% if game.image %}display:none{% endif %}">
-                            <span style="font-size: 2rem">🎮</span>
-                            <span>{{ game.title[:20] }}...</span>
-                        </div>
-                    </div>
-                    
+                    {% if g.image %}<img src="{{ g.image }}" class="game-image" loading="lazy">
+                    {% else %}<div class="image-placeholder">🎮</div>{% endif %}
                     <div class="game-content">
-                        <h3 class="game-title">{{ game.title }}</h3>
-                        
-                        <div class="game-meta">
-                            <span class="meta-tag tag-free">FREE</span>
-                            {% if game.is_new %}<span class="meta-tag tag-new">NEW</span>{% endif %}
-                        </div>
-                        
-                        {% if game.ends_at_fmt and not game.expired %}
-                        <div class="game-timer">
-                            ⏳ До: <span class="timer-time">{{ game.ends_at_fmt }}</span>
-                        </div>
-                        {% endif %}
-                        
-                        <a href="{{ game.url }}" target="_blank" class="btn btn-primary">
-                            Открыть →
-                        </a>
+                        <div class="game-title">{{ g.title }}</div>
+                        <a href="{{ g.url }}" target="_blank" class="btn">Открыть →</a>
                     </div>
                 </div>
                 {% endfor %}
@@ -1775,40 +1431,15 @@ PAGE = Template("""
         
         {% if kind in ["all", "weekend"] and weekend|length > 0 %}
         <div class="section">
-            <div class="section-header">
-                <span>⏱</span>
-                <h2 class="section-title">Free Weekend</h2>
-                <span class="section-count">{{ weekend|length }}</span>
-            </div>
-            
+            <div class="section-header"><span>⏱ Free Weekend ({{ weekend|length }})</span></div>
             <div class="games-grid">
-                {% for game in weekend %}
+                {% for g in weekend %}
                 <div class="game-card">
-                    <div class="game-image-container">
-                        <div class="store-badge store-{{ game.store }}">
-                            {{ game.store|upper }}
-                        </div>
-                        
-                        {% if game.image %}
-                        <img src="{{ game.image }}" alt="{{ game.title }}" class="game-image" loading="lazy">
-                        {% else %}
-                        <div class="image-placeholder">
-                            <span style="font-size: 2rem">🎮</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                    
+                    {% if g.image %}<img src="{{ g.image }}" class="game-image" loading="lazy">
+                    {% else %}<div class="image-placeholder">🎮</div>{% endif %}
                     <div class="game-content">
-                        <h3 class="game-title">{{ game.title }}</h3>
-                        
-                        <div class="game-meta">
-                            <span class="meta-tag">WEEKEND</span>
-                            {% if game.is_new %}<span class="meta-tag tag-new">NEW</span>{% endif %}
-                        </div>
-                        
-                        <a href="{{ game.url }}" target="_blank" class="btn btn-primary">
-                            Играть →
-                        </a>
+                        <div class="game-title">{{ g.title }}</div>
+                        <a href="{{ g.url }}" target="_blank" class="btn">Играть →</a>
                     </div>
                 </div>
                 {% endfor %}
@@ -1818,43 +1449,16 @@ PAGE = Template("""
         
         {% if kind in ["all", "deals"] and hot|length > 0 %}
         <div class="section">
-            <div class="section-header">
-                <span>💸</span>
-                <h2 class="section-title">Hot Deals 70%+</h2>
-                <span class="section-count">{{ hot|length }}</span>
-            </div>
-            
+            <div class="section-header"><span>💸 Hot Deals ({{ hot|length }})</span></div>
             <div class="games-grid">
-                {% for game in hot %}
+                {% for g in hot %}
                 <div class="game-card">
-                    <div class="game-image-container">
-                        <div class="store-badge store-{{ game.store }}">
-                            {{ game.store|upper }}
-                        </div>
-                        
-                        {% if game.image %}
-                        <img src="{{ game.image }}" alt="{{ game.title }}" class="game-image" loading="lazy">
-                        {% else %}
-                        <div class="image-placeholder">
-                            <span style="font-size: 2rem">🎮</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                    
+                    {% if g.image %}<img src="{{ g.image }}" class="game-image" loading="lazy">
+                    {% else %}<div class="image-placeholder">🎮</div>{% endif %}
                     <div class="game-content">
-                        <h3 class="game-title">{{ game.title }}</h3>
-                        
-                        <div class="game-meta">
-                            {% if game.discount_pct %}
-                            <span class="meta-tag" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">
-                                -{{ game.discount_pct }}%
-                            </span>
-                            {% endif %}
-                        </div>
-                        
-                        <a href="{{ game.url }}" target="_blank" class="btn btn-primary">
-                            Купить →
-                        </a>
+                        <div class="game-title">{{ g.title }}</div>
+                        {% if g.discount_pct %}<div style="color: #ef4444; font-weight: 600;">-{{ g.discount_pct }}%</div>{% endif %}
+                        <a href="{{ g.url }}" target="_blank" class="btn">Купить →</a>
                     </div>
                 </div>
                 {% endfor %}
@@ -1864,87 +1468,23 @@ PAGE = Template("""
         
         {% if kind in ["all", "free"] and free_games is defined and free_games|length > 0 %}
         <div class="section">
-            <div class="section-header">
-                <span>🔥</span>
-                <h2 class="section-title">Бесплатные игры (F2P)</h2>
-                <span class="section-count">{{ free_games|length }}</span>
-            </div>
-            
+            <div class="section-header"><span>🔥 Бесплатные игры ({{ free_games|length }})</span></div>
             <div class="games-grid">
-                {% for game in free_games %}
+                {% for g in free_games %}
                 <div class="game-card">
-                    <div class="game-image-container">
-                        <div class="store-badge store-{{ game.store }}">
-                            {{ game.store|upper }}
-                        </div>
-                        
-                        {% if game.image_url %}
-                        <img src="{{ game.image_url }}" alt="{{ game.title }}" class="game-image" loading="lazy">
-                        {% else %}
-                        <div class="image-placeholder">
-                            <span style="font-size: 2rem">🎮</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                    
+                    {% if g.image_url %}<img src="{{ g.image_url }}" class="game-image" loading="lazy">
+                    {% else %}<div class="image-placeholder">🎮</div>{% endif %}
                     <div class="game-content">
-                        <h3 class="game-title">{{ game.title }}</h3>
-                        
-                        <div class="game-meta">
-                            <span class="meta-tag tag-free">F2P</span>
-                        </div>
-                        
-                        {% if game.note %}
-                        <div class="game-timer">{{ game.note }}</div>
-                        {% endif %}
-                        
-                        <a href="{{ game.url }}" target="_blank" class="btn btn-primary">
-                            Играть →
-                        </a>
+                        <div class="game-title">{{ g.title }}</div>
+                        {% if g.note %}<div style="font-size: 0.85rem; color: #94a3b8;">{{ g.note }}</div>{% endif %}
+                        <a href="{{ g.url }}" target="_blank" class="btn">Играть →</a>
                     </div>
                 </div>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
-        
-        {% if (keep|length == 0 and weekend|length == 0 and hot|length == 0 and (not free_games or free_games|length == 0)) %}
-        <div class="empty-state">
-            <div style="font-size: 3rem; margin-bottom: 16px;">🎮</div>
-            <h2>Игры не найдены</h2>
-            <p style="color: var(--text-secondary); margin-top: 8px;">
-                Попробуйте изменить фильтры
-            </p>
-        </div>
-        {% endif %}
     </div>
-    
-    <div id="toast" class="toast">
-        <span id="toast-message">Готово!</span>
-    </div>
-
-    <script>
-        // Переключение фильтров на мобилке
-        function toggleFilters() {
-            const filters = document.getElementById('filters');
-            filters.classList.toggle('show');
-        }
-        
-        // Автоопределение устройства
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        if (isMobile) {
-            document.body.classList.add('mobile');
-        }
-        
-        // Toast уведомления
-        function showToast(msg) {
-            const toast = document.getElementById('toast');
-            const message = document.getElementById('toast-message');
-            message.textContent = msg;
-            toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 2000);
-        }
-    </script>
 </body>
 </html>
 """)
@@ -1954,33 +1494,25 @@ def store_badge(store: str | None) -> str:
 
 
 def images_for_row(row_store: str | None, url: str, image_url: str | None):
-    """Улучшенная версия - правильно работает с БД и AppID"""
+    """Правильное извлечение изображений"""
     st = (str(row_store) or "").strip().lower()
     
     # 1. Если есть image_url в БД - используем его!
     if image_url and str(image_url).strip():
         return str(image_url), ""
     
-    # 2. Только для Steam пытаемся сгенерировать
+    # 2. Только для Steam
     if st != "steam":
         return "", ""
     
     # 3. Извлекаем AppID из URL
-    import re
-    appid = None
+    appid = extract_steam_app_id_fast(url)
     
-    # Из Steam URL
-    match = re.search(r'/app/(\d+)', str(url))
-    if match:
-        appid = match.group(1)
-    
-    # 4. Если нашли AppID - генерируем оба формата
+    # 4. Если нашли - генерируем URL
     if appid:
-        # Новый формат (для игр после 2023)
-        main_url = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
-        # Старый формат (фоллбэк)
-        fallback_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
-        return main_url, fallback_url
+        main = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+        fallback = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
+        return main, fallback
     
     return "", ""
 
@@ -2129,25 +1661,27 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         })
 
 # Подсчитываем статистику
+    # Подсчитываем статистику
     total_games = len(keep) + len(weekend) + len(hot)
     new_today = sum(1 for g in (keep + weekend + hot) if g.get("is_new"))
     expiring_soon = sum(1 for g in (keep + weekend) if g.get("time_left") and "час" in g.get("time_left", ""))
     last_update = datetime.now().strftime("%d.%m.%Y %H:%M")
 
     return PAGE.render(
-    keep=keep,
-    weekend=weekend,
-    hot=hot,
-    steam_min=STEAM_MIN,
-    epic_min=EPIC_MIN,
-    show_expired=int(show_expired),
-    store=store,
-    kind=kind,
-    total_games=total_games,
-    new_today=new_today,
-    expiring_soon=expiring_soon,
-    last_update=last_update,
-    generate_placeholder=lambda t, s: "",
+        keep=keep,
+        weekend=weekend,
+        hot=hot,
+        free_games=free_games,
+        steam_min=STEAM_MIN,
+        epic_min=EPIC_MIN,
+        show_expired=int(show_expired),
+        store=store,
+        kind=kind,
+        total_games=total_games,
+        new_today=new_today,
+        expiring_soon=expiring_soon,
+        last_update=last_update,
+        generate_placeholder=lambda t, s: "",
 )
 
 # --------------------
