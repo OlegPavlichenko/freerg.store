@@ -1310,13 +1310,13 @@ PAGE = Template("""
             background: var(--bg-primary);
             color: var(--text-primary);
             line-height: 1.6;
-            padding-top: 140px;
+            padding-top: 170px; /* 🔥 Увеличил отступ чтобы заголовки не налезали */
             background-image: 
                 radial-gradient(circle at 20% 10%, rgba(102, 126, 234, 0.08) 0%, transparent 50%),
                 radial-gradient(circle at 80% 90%, rgba(118, 75, 162, 0.08) 0%, transparent 50%);
         }
         
-        /* 🎨 КРАСИВАЯ КОМПАКТНАЯ ШАПКА */
+        /* ШАПКА */
         .header {
             position: fixed;
             top: 0;
@@ -1336,7 +1336,6 @@ PAGE = Template("""
             text-align: center;
         }
         
-        /* Бренд по центру */
         .brand {
             margin-bottom: 12px;
         }
@@ -1357,7 +1356,6 @@ PAGE = Template("""
             color: var(--text-secondary);
         }
         
-        /* Стильные фильтры */
         .filters {
             display: flex;
             gap: 8px;
@@ -1403,6 +1401,43 @@ PAGE = Template("""
             color: white;
             border-color: rgba(255, 255, 255, 0.2);
             box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        /* 🚀 КНОПКА "НАВЕРХ" */
+        .scroll-to-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .scroll-to-top.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .scroll-to-top:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .scroll-to-top:active {
+            transform: translateY(-2px);
         }
         
         /* Контейнер */
@@ -1668,7 +1703,7 @@ PAGE = Template("""
         /* 📱 АДАПТАЦИЯ ДЛЯ МОБИЛЬНЫХ */
         @media (max-width: 768px) {
             body {
-                padding-top: 160px;
+                padding-top: 190px; /* Больше отступ для мобилки */
             }
             
             .header-content {
@@ -1721,6 +1756,15 @@ PAGE = Template("""
             .container {
                 padding: 16px 12px;
             }
+            
+            /* Кнопка наверх на мобилке */
+            .scroll-to-top {
+                width: 45px;
+                height: 45px;
+                bottom: 20px;
+                right: 20px;
+                font-size: 1.3rem;
+            }
         }
         
         /* 💻 БОЛЬШИЕ ЭКРАНЫ */
@@ -1745,10 +1789,15 @@ PAGE = Template("""
         .game-card {
             animation: fadeIn 0.4s ease-out;
         }
+        
+        /* Плавная прокрутка */
+        html {
+            scroll-behavior: smooth;
+        }
     </style>
 </head>
 <body>
-    <!-- 🎨 КРАСИВАЯ ШАПКА ПО ЦЕНТРУ -->
+    <!-- ШАПКА -->
     <div class="header">
         <div class="header-content">
             <div class="brand">
@@ -1797,6 +1846,11 @@ PAGE = Template("""
             </div>
         </div>
     </div>
+    
+    <!-- 🚀 КНОПКА НАВЕРХ -->
+    <button class="scroll-to-top" id="scrollToTop" onclick="scrollToTop()">
+        ↑
+    </button>
     
     <div class="container">
         {% if kind in ["all", "keep"] and keep|length > 0 %}
@@ -2013,6 +2067,28 @@ PAGE = Template("""
         </div>
         {% endif %}
     </div>
+
+    <script>
+        // 🚀 Кнопка "Наверх"
+        const scrollBtn = document.getElementById('scrollToTop');
+        
+        // Показываем кнопку при прокрутке вниз
+        window.addEventListener('scroll', function() {
+            if (window.pageYOffset > 300) {
+                scrollBtn.classList.add('show');
+            } else {
+                scrollBtn.classList.remove('show');
+            }
+        });
+        
+        // Плавная прокрутка наверх
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+    </script>
 </body>
 </html>
 """)
