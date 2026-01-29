@@ -1926,6 +1926,10 @@ PAGE = Template("""
                 <div class="game-card">
                     <div class="game-image-container">
                         <div class="store-badge store-{{ game.store }}">
+                            {% if game.store == 'steam' %}STEAM
+                            {% elif game.store == 'epic' %}EPIC
+                            {% elif game.store == 'gog' %}GOG
+                            {% elif game.store == 'prime' %}PRIME            
                             {{ game.store|upper }}
                         </div>
                         
@@ -1975,6 +1979,10 @@ PAGE = Template("""
                 <div class="game-card">
                     <div class="game-image-container">
                         <div class="store-badge store-{{ game.store }}">
+                            {% if game.store == 'steam' %}STEAM
+                            {% elif game.store == 'epic' %}EPIC
+                            {% elif game.store == 'gog' %}GOG
+                            {% elif game.store == 'prime' %}PRIME            
                             {{ game.store|upper }}
                         </div>
                         
@@ -2184,6 +2192,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         img_main, img_fb = images_for_row(r[0], r[2], r[3])
 
         keep.append({
+            "store": (r[0] or "").strip().lower(),
             "store_badge": store_badge(r[0]),
             "title": r[1],
             "url": r[2],
@@ -2205,6 +2214,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         img_main, img_fb = images_for_row(r[0], r[2], r[3])
 
         weekend.append({
+            "store": (r[0] or "").strip().lower(),
             "store_badge": store_badge(r[0]),
             "title": r[1],
             "url": r[2],
@@ -2226,6 +2236,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         img_main, img_fb = images_for_row(r[0], r[2], r[3])
 
         hot.append({
+            "store": (r[0] or "").strip().lower(),
             "store_badge": store_badge(r[0]),
             "title": r[1],
             "url": r[2],
