@@ -1310,7 +1310,7 @@ PAGE = Template("""
             background: var(--bg-primary);
             color: var(--text-primary);
             line-height: 1.6;
-            padding-top: 160px; /* 🔥 Увеличил отступ чтобы заголовки не налезали */
+            padding-top: 190px; /* 🔥 Увеличил отступ чтобы заголовки не налезали */
             background-image: 
                 radial-gradient(circle at 20% 10%, rgba(102, 126, 234, 0.08) 0%, transparent 50%),
                 radial-gradient(circle at 80% 90%, rgba(118, 75, 162, 0.08) 0%, transparent 50%);
