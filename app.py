@@ -137,7 +137,7 @@ def backfill_defaults():
 
 
 def deal_id(store: str, external_id: str, url: str) -> str:
-    base = f"{store}|{external_id}|{url}"
+    base = f"{store}|{url}"
     return hashlib.sha256(base.encode("utf-8")).hexdigest()[:24]
 
 

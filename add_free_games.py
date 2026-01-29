@@ -101,7 +101,7 @@ FREE_GAMES = [
     },
     {
         "store": "steam",
-        "title": "Marvel_Rivals",
+        "title": "Marvel Rivals",
         "url": "https://store.steampowered.com/app/2767030/",
         "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/2767030/header.jpg",
         "note": "Action",
