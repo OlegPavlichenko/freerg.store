@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""
+Скрипт для добавления популярных бесплатных игр (F2P) в базу данных
+Запустить: python3 add_free_games.py
+"""
+
+import sqlite3
+
+DB_PATH = "/opt/freerg/data/data.sqlite3"
+
+# Популярные бесплатные игры
+FREE_GAMES = [
+    # Steam
+    {
+        "store": "steam",
+        "title": "Counter-Strike 2",
+        "url": "https://store.steampowered.com/app/730/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/730/header.jpg",
+        "note": "Легендарный шутер",
+        "sort": 1
+    },
+    {
+        "store": "steam",
+        "title": "Dota 2",
+        "url": "https://store.steampowered.com/app/570/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/570/header.jpg",
+        "note": "MOBA",
+        "sort": 2
+    },
+    {
+        "store": "steam",
+        "title": "Team Fortress 2",
+        "url": "https://store.steampowered.com/app/440/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/440/header.jpg",
+        "note": "Классический шутер",
+        "sort": 3
+    },
+    {
+        "store": "steam",
+        "title": "Warframe",
+        "url": "https://store.steampowered.com/app/230410/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/230410/header.jpg",
+        "note": "Sci-Fi shooter",
+        "sort": 4
+    },
+    {
+        "store": "steam",
+        "title": "Path of Exile",
+        "url": "https://store.steampowered.com/app/238960/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/238960/header.jpg",
+        "note": "Action RPG",
+        "sort": 5
+    },
+    {
+        "store": "steam",
+        "title": "Apex Legends",
+        "url": "https://store.steampowered.com/app/1172470/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/header.jpg",
+        "note": "Battle Royale",
+        "sort": 6
+    },
+    {
+        "store": "steam",
+        "title": "Lost Ark",
+        "url": "https://store.steampowered.com/app/1599340/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/1599340/header.jpg",
+        "note": "MMORPG",
+        "sort": 7
+    },
+    {
+        "store": "steam",
+        "title": "Destiny 2",
+        "url": "https://store.steampowered.com/app/1085660/",
+        "image_url": "https://cdn.cloudflare.steamstatic.com/steam/apps/1085660/header.jpg",
+        "note": "Sci-Fi MMO",
+        "sort": 8
+    },
+    
+    # Epic Games
+    {
+        "store": "epic",
+        "title": "Fortnite",
+        "url": "https://www.epicgames.com/fortnite/",
+        "image_url": "https://cdn2.unrealengine.com/26br-s26-egs-launcher-blade-2560x1440-2560x1440-ee49e569e8e2.jpg",
+        "note": "Battle Royale",
+        "sort": 10
+    },
+    {
+        "store": "epic",
+        "title": "Rocket League",
+        "url": "https://www.epicgames.com/store/en-US/p/rocket-league",
+        "image_url": "",
+        "note": "Футбол на машинах",
+        "sort": 11
+    },
+    {
+        "store": "epic",
+        "title": "Fall Guys",
+        "url": "https://www.epicgames.com/store/en-US/p/fall-guys",
+        "image_url": "",
+        "note": "Party game",
+        "sort": 12
+    },
+    
+    # GOG
+    {
+        "store": "gog",
+        "title": "Gwent",
+        "url": "https://www.gog.com/game/gwent_the_witcher_card_game",
+        "image_url": "",
+        "note": "Карточная игра",
+        "sort": 20
+    },
+]
+
+
+def add_free_games():
+    """Добавляет бесплатные игры в базу данных"""
+    
+    conn = sqlite3.connect(DB_PATH)
+    
+    # Проверяем существование таблицы
+    cursor = conn.execute("""
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name='free_games'
+    """)
+    
+    if not cursor.fetchone():
+        print("❌ Таблица free_games не существует!")
+        print("   Сначала запусти основное приложение для создания таблиц.")
+        conn.close()
+        return
+    
+    added = 0
+    updated = 0
+    
+    for game in FREE_GAMES:
+        try:
+            # Пробуем вставить
+            cursor = conn.execute("""
+                INSERT INTO free_games (store, title, url, image_url, note, sort)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                game["store"],
+                game["title"],
+                game["url"],
+                game["image_url"],
+                game["note"],
+                game["sort"]
+            ))
+            
+            if cursor.rowcount > 0:
+                added += 1
+                print(f"✅ Добавлено: {game['title']} ({game['store']})")
+            
+        except sqlite3.IntegrityError:
+            # Если игра уже есть (UNIQUE constraint на url) - обновляем
+            conn.execute("""
+                UPDATE free_games 
+                SET title=?, image_url=?, note=?, sort=?
+                WHERE url=?
+            """, (
+                game["title"],
+                game["image_url"],
+                game["note"],
+                game["sort"],
+                game["url"]
+            ))
+            updated += 1
+            print(f"🔄 Обновлено: {game['title']} ({game['store']})")
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"\n{'='*50}")
+    print(f"✅ Готово!")
+    print(f"   Добавлено: {added}")
+    print(f"   Обновлено: {updated}")
+    print(f"   Всего игр: {len(FREE_GAMES)}")
+    print(f"\nТеперь открой сайт и перейди в раздел '🔥 Бесплатные'")
+
+
+if __name__ == "__main__":
+    print("🎮 Добавление бесплатных игр в базу данных")
+    print("="*50)
+    add_free_games()
