@@ -1315,6 +1315,20 @@ PAGE = Template("""
                 radial-gradient(circle at 20% 10%, rgba(102, 126, 234, 0.08) 0%, transparent 50%),
                 radial-gradient(circle at 80% 90%, rgba(118, 75, 162, 0.08) 0%, transparent 50%);
         }
+                
+        .collapse-btn{
+        margin-top:10px;
+        padding:8px 12px;
+        border-radius:10px;
+        border:1px solid var(--border);
+        background: rgba(255,255,255,.06);
+        color: var(--text-primary);
+        font-weight:700;
+        }
+
+        .header.collapsed .filters{ display:none; }
+        .header.collapsed .brand p{ display:none; } /* опционально */
+
         
         /* ШАПКА */
         .header {
@@ -1852,6 +1866,7 @@ PAGE = Template("""
                         📦 Все
                     </a>
                 </div>
+                <button class="collapse-btn" id="toggleHeader">Свернуть ▲</button>
             </div>
         </div>
     </div>
@@ -2138,6 +2153,18 @@ PAGE = Template("""
     }
   }, {passive:true});
         })();
+    </script>
+    <script>
+(function(){
+  const btn = document.getElementById("toggleHeader");
+  const header = document.querySelector(".header");
+  if(!btn || !header) return;
+
+  btn.addEventListener("click", () => {
+    header.classList.toggle("collapsed");
+    btn.textContent = header.classList.contains("collapsed") ? "Фильтры ▼" : "Свернуть ▲";
+  });
+})();
     </script>
 </body>
 </html>
