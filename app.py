@@ -1866,8 +1866,9 @@ PAGE = Template("""
                         📦 Все
                     </a>
                 </div>
-                <button class="collapse-btn" id="toggleHeader">Свернуть ▲</button>
-            </div>
+              </div>
+                  <button class="collapse-btn" id="toggleHeader">Свернуть ▲</button>
+
         </div>
     </div>
     
