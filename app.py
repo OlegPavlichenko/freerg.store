@@ -38,7 +38,6 @@ POST_LIMIT = int(os.getenv("POST_LIMIT", "10"))
 
 # tz для красивого дедлайна (Бишкек UTC+6)
 BISHKEK_TZ = pytz_timezone("Asia/Bishkek")
-BISHKEK_TZ_APS = timezone("Asia/Bishkek")
 
 EPIC_COUNTRY = os.getenv("EPIC_COUNTRY", "KG")   # попробуй KG
 EPIC_LOCALE  = os.getenv("EPIC_LOCALE", "ru-RU")
