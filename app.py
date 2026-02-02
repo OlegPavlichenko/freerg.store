@@ -1730,7 +1730,7 @@ PAGE = Template("""
             }
                 
             body {
-                transition: padding-top .22s ease
+                transition: padding-top .22s ease;
                 }
                 
             .header {
@@ -1837,8 +1837,7 @@ PAGE = Template("""
                 <p>Актуальные бесплатные игры и скидки</p>
             </div>
                 <div class="header-divider">
-  <button class="collapse-btn" id="collapseBtn" type="button">Свернуть ▲</button>
-            
+      <button class="collapse-btn" id="collapseBtn" type="button">Свернуть ▲</button>
             <div class="filters">
                 <!-- Группа: Тип -->
                 <div class="filter-group">
@@ -1878,9 +1877,8 @@ PAGE = Template("""
                     </a>
                 </div>
               </div>
-    </div>
-                        </div>
-    </div>
+          </div>
+        </div>
     
     <!-- 🚀 КНОПКА НАВЕРХ -->
     <button class="scroll-to-top" id="scrollToTop" onclick="scrollToTop()">
@@ -1905,7 +1903,8 @@ PAGE = Template("""
                             {% elif game.store == 'epic' %}EPIC
                             {% elif game.store == 'gog' %}GOG
                             {% elif game.store == 'prime' %}PRIME
-                            {% else %}{{ game.store|upper }}{% endif %}
+                            {% else %}{{ game.store|upper }}
+                            {% endif %}
                         </div>
                         
                         {% if game.image %}
@@ -1964,8 +1963,9 @@ PAGE = Template("""
                             {% if game.store == 'steam' %}STEAM
                             {% elif game.store == 'epic' %}EPIC
                             {% elif game.store == 'gog' %}GOG
-                            {% elif game.store == 'prime' %}PRIME            
-                            {{ game.store|upper }}{% endif %}
+                            {% elif game.store == 'prime' %}PRIME 
+                            {% else %}{{ game.store|upper }}
+                            {% endif %}
                         </div>
                         
                         {% if game.image %}
@@ -2017,8 +2017,9 @@ PAGE = Template("""
                             {% if game.store == 'steam' %}STEAM
                             {% elif game.store == 'epic' %}EPIC
                             {% elif game.store == 'gog' %}GOG
-                            {% elif game.store == 'prime' %}PRIME            
-                            {{ game.store|upper }}{% endif %}
+                            {% elif game.store == 'prime' %}PRIME
+                            {% else %}{{ game.store|upper }}
+                            {% endif %}
                         </div>
                         
                         {% if game.image %}
@@ -2186,19 +2187,28 @@ PAGE = Template("""
   }, { passive:true });
 })();
 </script>
-
-    <script>
+<script>
 (function(){
   const btn = document.getElementById("collapseBtn");
   const header = document.querySelector(".header");
   if(!btn || !header) return;
 
+  function syncPadding(){
+    const h = header.offsetHeight;
+    document.body.style.paddingTop = header.classList.contains("hidden") ? "0px" : (h + "px");
+  }
+
+  // на старте
+  syncPadding();
+  window.addEventListener("resize", syncPadding);
+
   btn.addEventListener("click", () => {
     header.classList.toggle("collapsed");
     btn.textContent = header.classList.contains("collapsed") ? "Фильтры ▼" : "Свернуть ▲";
+    syncPadding(); // ✅ вот это ключевое
   });
 })();
-    </script>
+</script>
 </body>
 </html>
 """)
