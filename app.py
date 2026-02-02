@@ -1315,7 +1315,7 @@ PAGE = Template("""
             background: var(--bg-primary);
             color: var(--text-primary);
             line-height: 1.6;
-            padding-top: 190px; /* 🔥 Увеличил отступ чтобы заголовки не налезали */
+            padding-top: 0px; /* 🔥 Увеличил отступ чтобы заголовки не налезали */
             background-image: 
                 radial-gradient(circle at 20% 10%, rgba(102, 126, 234, 0.08) 0%, transparent 50%),
                 radial-gradient(circle at 80% 90%, rgba(118, 75, 162, 0.08) 0%, transparent 50%);
@@ -1346,6 +1346,11 @@ PAGE = Template("""
             border-bottom: 1px solid var(--border);
             z-index: 100;
             box-shadow: var(--shadow);
+            transition: transform .22s ease; will-change: transform;
+        }
+                
+        .header.hidden {
+            transform: translateY(-100%);
         }
         
         .header-content {
@@ -1720,28 +1725,14 @@ PAGE = Template("""
         }
         
         /* 📱 АДАПТАЦИЯ ДЛЯ МОБИЛЬНЫХ */
-        @media (max-width: 768px) {
-            body {
-                padding-top: 310px; /* Больше отступ для мобилки */
+        body {
+                padding-top: 0px; /* Больше отступ для мобилки */
             }
             
             .header-content {
                 padding: 12px 16px;
             }
                 
-            body {
-                transition: padding-top .22s ease;
-                }
-                
-            .header {
-                transition: transform .22s ease;
-                will-change: transform;
-            }
-                
-            .header.hidden {
-                transform: translateY(-100%);
-            }
-            
             .brand h1 {
                 font-size: 1.5rem;
             }
@@ -2136,28 +2127,41 @@ PAGE = Template("""
     <script>
 (function(){
   const header = document.querySelector(".header");
+  const btn = document.getElementById("collapseBtn");
   if(!header) return;
 
   let lastY = window.scrollY;
   let ticking = false;
-  let headerHeight = header.offsetHeight;
 
-  // 🔥 ставим корректный padding-top
-  function syncPadding(){
-    headerHeight = header.offsetHeight;
-    document.body.style.paddingTop = headerHeight + "px";
+  function headerHeight(){
+    return header.offsetHeight;
   }
 
-  syncPadding();
-  window.addEventListener("resize", syncPadding);
+  function applyPadding(){
+    // ✅ padding зависит только от текущей высоты (свернута/развернута)
+    document.body.style.paddingTop = headerHeight() + "px";
+  }
+
+  // старт + resize
+  applyPadding();
+  window.addEventListener("resize", applyPadding);
+
+  // кнопка свернуть/развернуть
+  if(btn){
+    btn.addEventListener("click", () => {
+      header.classList.toggle("collapsed");
+      btn.textContent = header.classList.contains("collapsed") ? "Фильтры ▼" : "Свернуть ▲";
+      // ✅ обновляем padding только после изменения высоты
+      requestAnimationFrame(applyPadding);
+    });
+  }
 
   function onScroll(){
     const y = window.scrollY;
 
-    // вверху всегда показываем
+    // вверху — всегда показываем
     if (y < 30){
       header.classList.remove("hidden");
-      document.body.style.paddingTop = headerHeight + "px";
       lastY = y;
       return;
     }
@@ -2165,12 +2169,10 @@ PAGE = Template("""
     // вниз — прячем
     if (y > lastY + 8){
       header.classList.add("hidden");
-      document.body.style.paddingTop = "0px";
     }
     // вверх — показываем
     else if (y < lastY - 8){
       header.classList.remove("hidden");
-      document.body.style.paddingTop = headerHeight + "px";
     }
 
     lastY = y;
@@ -2187,6 +2189,7 @@ PAGE = Template("""
   }, { passive:true });
 })();
 </script>
+
 <script>
 (function(){
   const btn = document.getElementById("collapseBtn");
