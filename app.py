@@ -6,7 +6,7 @@ import asyncio
 import requests
 
 from datetime import datetime, timezone as dt_timezone, timedelta
-from pytz import timezone as pytz_timezone
+from zoneinfo import ZoneInfo
 from apscheduler.triggers.cron import CronTrigger
 
 from fastapi import FastAPI
@@ -37,7 +37,7 @@ PRIME_MIN = int(os.getenv("PRIME_MIN", "1440"))
 POST_LIMIT = int(os.getenv("POST_LIMIT", "10"))
 
 # tz для красивого дедлайна (Бишкек UTC+6)
-BISHKEK_TZ = pytz_timezone("Asia/Bishkek")
+BISHKEK_TZ = ZoneInfo("Asia/Bishkek")
 
 EPIC_COUNTRY = os.getenv("EPIC_COUNTRY", "KG")   # попробуй KG
 EPIC_LOCALE  = os.getenv("EPIC_LOCALE", "ru-RU")
