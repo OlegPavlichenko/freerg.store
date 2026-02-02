@@ -4,7 +4,10 @@ import sqlite3
 import hashlib
 import asyncio
 import requests
-from datetime import datetime, timezone, timedelta
+
+from datetime import datetime, timezone as dt_timezone, timedelta
+from pytz import timezone as pytz_timezone
+from apscheduler.triggers.cron import CronTrigger
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
@@ -12,10 +15,6 @@ from jinja2 import Template
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
-
-from apscheduler.triggers.cron import CronTrigger
-from pytz import timezone
-
 
 
 # --------------------
@@ -38,7 +37,7 @@ PRIME_MIN = int(os.getenv("PRIME_MIN", "1440"))
 POST_LIMIT = int(os.getenv("POST_LIMIT", "10"))
 
 # tz для красивого дедлайна (Бишкек UTC+6)
-BISHKEK_TZ = timezone(timedelta(hours=6))
+BISHKEK_TZ = pytz_timezone("Asia/Bishkek")
 BISHKEK_TZ_APS = timezone("Asia/Bishkek")
 
 EPIC_COUNTRY = os.getenv("EPIC_COUNTRY", "KG")   # попробуй KG
@@ -177,14 +176,14 @@ def is_new(created_at: str | None, hours: int = 24) -> bool:
     dt = parse_iso_utc(created_at)
     if not dt:
         return False
-    return dt >= (datetime.now(timezone.utc) - timedelta(hours=hours))
+    return dt >= (datetime.now(dt_timezone.utc) - timedelta(hours=hours))
 
 
 def time_left_label(ends_at: str | None) -> str | None:
     dt = parse_iso_utc(ends_at)
     if not dt:
         return None
-    now = datetime.now(timezone.utc)
+    now = datetime.now(dt_timezone.utc)
     delta = dt - now
     if delta.total_seconds() <= 0:
         return "истекло"
@@ -210,14 +209,14 @@ def is_active_end(ends_at: str | None) -> bool:
     dt = parse_iso_utc(ends_at)
     if not dt:
         return True  # если дедлайна нет — считаем актуальным
-    return dt > datetime.now(timezone.utc)
+    return dt >= (datetime.now(dt_timezone.utc) - timedelta(hours=hours))
 
 
 def is_expired_recent(ends_at: str | None, days: int = 7) -> bool:
     dt = parse_iso_utc(ends_at)
     if not dt:
         return False
-    now = datetime.now(timezone.utc)
+    now = datetime.now(dt_timezone.utc)
     return (dt <= now) and (dt >= now - timedelta(days=days))
 
 
@@ -227,7 +226,7 @@ def cleanup_expired(keep_days: int = 7) -> int:
     keep_days=7 => неделю храним, потом чистим.
     Возвращает количество удалённых.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=keep_days)
+    cutoff = datetime.now(dt_timezone.utc) - timedelta(days=keep_days)
 
     conn = db()
     rows = conn.execute(
@@ -1003,7 +1002,7 @@ def fetch_epic(locale=None, country=None):
     catalog = root.get("data", {}).get("Catalog", {})
     elements = catalog.get("searchStore", {}).get("elements", []) or []
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(dt_timezone.utc)
 
     def parse_iso(s):
         if not s:
@@ -1076,7 +1075,7 @@ def fetch_epic(locale=None, country=None):
 # --------------------
 def save_deals(deals: list[dict]):
     conn = db()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(dt_timezone.utc).isoformat()
 
     new_items = 0
     for d in deals:
@@ -2191,7 +2190,7 @@ PAGE = Template("""
 
     <script>
 (function(){
-  const btn = document.getElementById("toggleHeader");
+  const btn = document.getElementById("collapseBtn");
   const header = document.querySelector(".header");
   if(!btn || !header) return;
 
@@ -2526,11 +2525,7 @@ async def on_startup():
     if not scheduler.get_job("epic_job"):
         scheduler.add_job(
             run_job,
-            trigger=CronTrigger(
-            hour=0,
-            minute=5,
-            timezone=BISHKEK_TZ_APS
-            ),
+            trigger=CronTrigger(hour=0, minute=5, timezone=BISHKEK_TZ),
             id="epic_job",
             replace_existing=True,
             kwargs={"store": "epic"},
