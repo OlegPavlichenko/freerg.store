@@ -13,6 +13,8 @@ from jinja2 import Template
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
 
+from apscheduler.triggers.cron import CronTrigger
+from pytz import timezone
 
 # --------------------
 # CONFIG (env)
@@ -34,7 +36,7 @@ PRIME_MIN = int(os.getenv("PRIME_MIN", "1440"))
 POST_LIMIT = int(os.getenv("POST_LIMIT", "10"))
 
 # tz для красивого дедлайна (Бишкек UTC+6)
-BISHKEK_TZ = timezone(timedelta(hours=6))
+BISHKEK_TZ = timezone("Asia/Bishkek")
 EPIC_COUNTRY = os.getenv("EPIC_COUNTRY", "KG")   # попробуй KG
 EPIC_LOCALE  = os.getenv("EPIC_LOCALE", "ru-RU")
 
@@ -1245,6 +1247,7 @@ async def job_async(store: str = "steam"):
                 tg = await post_unposted_to_telegram(limit=POST_LIMIT, store="steam")
 
             elif st == "epic":
+                print("🟦 EPIC JOB RUN @", datetime.now(BISHKEK_TZ))
                 deals = fetch_epic()
                 new_items = save_deals(deals)
                 tg = await post_unposted_to_telegram(limit=2, store="epic")
@@ -1831,6 +1834,8 @@ PAGE = Template("""
                 <h1>🎮 Free Redeem Games Store</h1>
                 <p>Актуальные бесплатные игры и скидки</p>
             </div>
+                <div class="header-divider">
+  <button class="collapse-btn" id="collapseBtn" type="button">Свернуть ▲</button>
             
             <div class="filters">
                 <!-- Группа: Тип -->
@@ -1871,9 +1876,8 @@ PAGE = Template("""
                     </a>
                 </div>
               </div>
-                  <button class="collapse-btn" id="toggleHeader">Свернуть ▲</button>
-
-        </div>
+    </div>
+                        </div>
     </div>
     
     <!-- 🚀 КНОПКА НАВЕРХ -->
@@ -2518,8 +2522,11 @@ async def on_startup():
     if not scheduler.get_job("epic_job"):
         scheduler.add_job(
             run_job,
-            "interval",
-            minutes=EPIC_MIN,
+            trigger=CronTrigger(
+            hour=0,
+            minute=5,
+            timezone=BISHKEK_TZ
+            ),
             id="epic_job",
             replace_existing=True,
             kwargs={"store": "epic"},
@@ -2528,8 +2535,11 @@ async def on_startup():
     if not scheduler.get_job("gog_job"):
         scheduler.add_job(
             run_job,
-            "interval",
-            minutes=GOG_MIN,
+            trigger=CronTrigger(
+            hour=0,
+            minute=5,
+            timezone=BISHKEK_TZ
+            ),
             id="gog_job",
             replace_existing=True,
             kwargs={"store": "gog"},
@@ -2538,8 +2548,11 @@ async def on_startup():
     if not scheduler.get_job("prime_job"):
         scheduler.add_job(
             run_job,
-            "interval",
-            minutes=PRIME_MIN,
+            trigger=CronTrigger(
+            hour=0,
+            minute=5,
+            timezone=BISHKEK_TZ
+            ),
             id="prime_job",
             replace_existing=True,
             kwargs={"store": "prime"},
