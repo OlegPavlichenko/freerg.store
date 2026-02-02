@@ -201,14 +201,14 @@ def time_left_label(ends_at: str | None) -> str | None:
 def sort_key_by_ends(ends_at: str | None):
     dt = parse_iso_utc(ends_at)
     # None/битые — в конец
-    return dt if dt else datetime.max.replace(tzinfo=timezone.utc)
+    return dt if dt else datetime.max.replace(tzinfo=dt_timezone.utc)
 
 
 def is_active_end(ends_at: str | None) -> bool:
     dt = parse_iso_utc(ends_at)
     if not dt:
         return True  # если дедлайна нет — считаем актуальным
-    return dt >= (datetime.now(dt_timezone.utc) - timedelta(hours=hours))
+    return dt > datetime.now(dt_timezone.utc)
 
 
 def is_expired_recent(ends_at: str | None, days: int = 7) -> bool:
