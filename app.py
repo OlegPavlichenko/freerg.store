@@ -16,6 +16,8 @@ from telegram import Bot, InlineKeyboardMarkup, InlineKeyboardButton
 from apscheduler.triggers.cron import CronTrigger
 from pytz import timezone
 
+
+
 # --------------------
 # CONFIG (env)
 # -----------------------------------------------------
@@ -36,7 +38,9 @@ PRIME_MIN = int(os.getenv("PRIME_MIN", "1440"))
 POST_LIMIT = int(os.getenv("POST_LIMIT", "10"))
 
 # tz для красивого дедлайна (Бишкек UTC+6)
-BISHKEK_TZ = timezone("Asia/Bishkek")
+BISHKEK_TZ = timezone(timedelta(hours=6))
+BISHKEK_TZ_APS = timezone("Asia/Bishkek")
+
 EPIC_COUNTRY = os.getenv("EPIC_COUNTRY", "KG")   # попробуй KG
 EPIC_LOCALE  = os.getenv("EPIC_LOCALE", "ru-RU")
 
@@ -2525,7 +2529,7 @@ async def on_startup():
             trigger=CronTrigger(
             hour=0,
             minute=5,
-            timezone=BISHKEK_TZ
+            timezone=BISHKEK_TZ_APS
             ),
             id="epic_job",
             replace_existing=True,
@@ -2538,7 +2542,7 @@ async def on_startup():
             trigger=CronTrigger(
             hour=0,
             minute=5,
-            timezone=BISHKEK_TZ
+            timezone=BISHKEK_TZ_APS
             ),
             id="gog_job",
             replace_existing=True,
@@ -2551,7 +2555,7 @@ async def on_startup():
             trigger=CronTrigger(
             hour=0,
             minute=5,
-            timezone=BISHKEK_TZ
+            timezone=BISHKEK_TZ_APS
             ),
             id="prime_job",
             replace_existing=True,
