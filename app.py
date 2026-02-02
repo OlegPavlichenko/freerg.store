@@ -1725,70 +1725,22 @@ PAGE = Template("""
         }
         
         /* 📱 АДАПТАЦИЯ ДЛЯ МОБИЛЬНЫХ */
-        body {
-                padding-top: 0px; /* Больше отступ для мобилки */
-            }
-            
-            .header-content {
-                padding: 12px 16px;
-            }
-                
-            .brand h1 {
-                font-size: 1.5rem;
-            }
-            
-            .brand p {
-                font-size: 0.8rem;
-            }
-            
-            .filters {
-                gap: 6px;
-            }
-            
-            .filter-group {
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-            
-            .filter-btn {
-                padding: 6px 12px;
-                font-size: 0.8rem;
-            }
-            
-            .games-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 12px;
-            }
-            
-            .game-image-container {
-                height: 110px;
-            }
-            
-            .game-content {
-                padding: 12px;
-            }
-            
-            .game-title {
-                font-size: 0.95rem;
-            }
-            
-            .section-title {
-                font-size: 1.25rem;
-            }
-            
-            .container {
-                padding: 16px 12px;
-            }
-            
-            /* Кнопка наверх на мобилке */
-            .scroll-to-top {
-                width: 45px;
-                height: 45px;
-                bottom: 20px;
-                right: 20px;
-                font-size: 1.3rem;
-            }
-        }
+@media (max-width: 768px) {
+  .header-content { padding: 12px 16px; }
+  .brand h1 { font-size: 1.5rem; }
+  .brand p { font-size: 0.8rem; }
+  .filters { gap: 6px; }
+  .filter-group { flex-wrap: wrap; justify-content: center; }
+  .filter-btn { padding: 6px 12px; font-size: 0.8rem; }
+  .games-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .game-image-container { height: 110px; }
+  .game-content { padding: 12px; }
+  .game-title { font-size: 0.95rem; }
+  .section-title { font-size: 1.25rem; }
+  .container { padding: 16px 12px; }
+  .scroll-to-top { width: 45px; height: 45px; bottom: 20px; right: 20px; font-size: 1.3rem; }
+}
+
         
         /* 💻 БОЛЬШИЕ ЭКРАНЫ */
         @media (min-width: 1400px) {
@@ -1824,14 +1776,14 @@ PAGE = Template("""
     <div class="header">
         <div class="header-content">
             <div class="brand">
-                <h1>🎮 Free Redeem Games Store</h1>
-                <p>Актуальные бесплатные игры и скидки</p>
-            </div>
-                <div class="header-divider">
-      <button class="collapse-btn" id="collapseBtn" type="button">Свернуть ▲</button>
-            <div class="filters">
-                <!-- Группа: Тип -->
-                <div class="filter-group">
+              <h1>🎮 Free Redeem Games Store</h1>
+              <p>Актуальные бесплатные игры и скидки</p>
+              </div>
+              <div class="header-divider">
+                <button class="collapse-btn" id="collapseBtn" type="button">Свернуть ▲</button>
+                <div class="filters">
+                  <!-- Группа: Тип -->
+                  <div class="filter-group">
                     <a href="/?kind=all&store={{ store }}" class="filter-btn {% if kind == 'all' %}active{% endif %}">
                         Все
                     </a>
@@ -1847,10 +1799,10 @@ PAGE = Template("""
                     <a href="/?kind=free&store={{ store }}" class="filter-btn {% if kind == 'free' %}active{% endif %}">
                         🔥 F2P
                     </a>
-                </div>
+                  </div>
                 
-                <!-- Группа: Магазин -->
-                <div class="filter-group">
+                  <!-- Группа: Магазин -->
+                  <div class="filter-group">
                     <a href="/?store=steam&kind={{ kind }}" class="filter-btn {% if store == 'steam' %}active{% endif %}">
                         🎮 Steam
                     </a>
@@ -1866,10 +1818,11 @@ PAGE = Template("""
                     <a href="/?store=all&kind={{ kind }}" class="filter-btn {% if store == 'all' %}active{% endif %}">
                         📦 Все
                     </a>
-                </div>
+                  </div>
+                  </div>
               </div>
-          </div>
         </div>
+  </div>
     
     <!-- 🚀 КНОПКА НАВЕРХ -->
     <button class="scroll-to-top" id="scrollToTop" onclick="scrollToTop()">
@@ -2133,25 +2086,21 @@ PAGE = Template("""
   let lastY = window.scrollY;
   let ticking = false;
 
-  function headerHeight(){
-    return header.offsetHeight;
-  }
-
   function applyPadding(){
-    // ✅ padding зависит только от текущей высоты (свернута/развернута)
-    document.body.style.paddingTop = headerHeight() + "px";
+    // ✅ padding всегда равен высоте header (даже когда hidden)
+    // иначе появляются "прыжки" и "пустота"
+    document.body.style.paddingTop = header.offsetHeight + "px";
   }
 
-  // старт + resize
+  // старт / resize
   applyPadding();
-  window.addEventListener("resize", applyPadding);
+  window.addEventListener("resize", () => requestAnimationFrame(applyPadding));
 
-  // кнопка свернуть/развернуть
+  // collapse toggle
   if(btn){
     btn.addEventListener("click", () => {
       header.classList.toggle("collapsed");
       btn.textContent = header.classList.contains("collapsed") ? "Фильтры ▼" : "Свернуть ▲";
-      // ✅ обновляем padding только после изменения высоты
       requestAnimationFrame(applyPadding);
     });
   }
@@ -2159,19 +2108,17 @@ PAGE = Template("""
   function onScroll(){
     const y = window.scrollY;
 
-    // вверху — всегда показываем
+    // верх страницы — всегда показываем
     if (y < 30){
       header.classList.remove("hidden");
       lastY = y;
       return;
     }
 
-    // вниз — прячем
-    if (y > lastY + 8){
+    // вниз — прячем, вверх — показываем
+    if (y > lastY + 12){
       header.classList.add("hidden");
-    }
-    // вверх — показываем
-    else if (y < lastY - 8){
+    } else if (y < lastY - 12){
       header.classList.remove("hidden");
     }
 
@@ -2187,31 +2134,12 @@ PAGE = Template("""
       ticking = true;
     }
   }, { passive:true });
+
+  // если шрифт/контент в header догрузился и высота изменилась
+  setTimeout(applyPadding, 200);
 })();
 </script>
 
-<script>
-(function(){
-  const btn = document.getElementById("collapseBtn");
-  const header = document.querySelector(".header");
-  if(!btn || !header) return;
-
-  function syncPadding(){
-    const h = header.offsetHeight;
-    document.body.style.paddingTop = header.classList.contains("hidden") ? "0px" : (h + "px");
-  }
-
-  // на старте
-  syncPadding();
-  window.addEventListener("resize", syncPadding);
-
-  btn.addEventListener("click", () => {
-    header.classList.toggle("collapsed");
-    btn.textContent = header.classList.contains("collapsed") ? "Фильтры ▼" : "Свернуть ▲";
-    syncPadding(); // ✅ вот это ключевое
-  });
-})();
-</script>
 </body>
 </html>
 """)
