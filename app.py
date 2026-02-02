@@ -2533,11 +2533,7 @@ async def on_startup():
     if not scheduler.get_job("gog_job"):
         scheduler.add_job(
             run_job,
-            trigger=CronTrigger(
-            hour=0,
-            minute=5,
-            timezone=BISHKEK_TZ_APS
-            ),
+            trigger=CronTrigger(hour=0, minute=5, timezone=BISHKEK_TZ),
             id="gog_job",
             replace_existing=True,
             kwargs={"store": "gog"},
@@ -2546,11 +2542,7 @@ async def on_startup():
     if not scheduler.get_job("prime_job"):
         scheduler.add_job(
             run_job,
-            trigger=CronTrigger(
-            hour=0,
-            minute=5,
-            timezone=BISHKEK_TZ_APS
-            ),
+            trigger=CronTrigger(hour=0, minute=5, timezone=BISHKEK_TZ),
             id="prime_job",
             replace_existing=True,
             kwargs={"store": "prime"},
