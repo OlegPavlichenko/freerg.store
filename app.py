@@ -2330,8 +2330,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     """).fetchall()
 
     hot_rows = conn.execute("""
-        SELECT id,store,title,url,image_url,ends_at,created_at,discount_pct,price_old,price_new,currency
-        FROM deals
+        SELECT id, store, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency        FROM deals
         WHERE kind='hot_deal'
         ORDER BY RANDOM()
         LIMIT 20
