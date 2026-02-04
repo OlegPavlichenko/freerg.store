@@ -2385,14 +2385,14 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
 # weekend
     weekend = []
     for r in weekend_rows:
-      did, st, title, url, image_url, ends_at, created_at = r
+        did, st, title, url, image_url, ends_at, created_at = r
 
-      if not (allow_time(ends_at) and allow_store(st)):
-        continue
+        if not (allow_time(ends_at) and allow_store(st)):
+            continue
 
-    img_main, img_fb = images_for_row(st, url, image_url)
+        img_main, img_fb = images_for_row(st, url, image_url)
 
-    weekend.append({
+        weekend.append({
         "id": did,
         "store": (st or "").strip().lower(),
         "store_badge": store_badge(st),
@@ -2412,32 +2412,32 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
 # hot (по магазину фильтруем, по времени можно НЕ фильтровать)
     hot = []
     for r in hot_rows:
-      did, st, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency = r
+        did, st, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency = r
 
-      if not allow_store(st):
-        continue
+        if not allow_store(st):
+            continue
 
-    img_main, img_fb = images_for_row(st, url, image_url)
+        img_main, img_fb = images_for_row(st, url, image_url)
 
-    hot.append({
-        "id": did,
-        "store": (st or "").strip().lower(),
-        "store_badge": store_badge(st),
-        "title": title,
-        "url": url,
-        "image": img_main,
-        "image_fallback": img_fb,
-        "ends_at": ends_at,
-        "is_new": is_new(created_at),
-        "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
-        "created_at": created_at,
-        "expired": not is_active_end(ends_at),
-        "time_left": time_left_label(ends_at),
-        "discount_pct": discount_pct,
-        "price_old": price_old,
-        "price_new": price_new,
-        "currency": currency,
-        "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
+        hot.append({
+            "id": did,
+            "store": (st or "").strip().lower(),
+            "store_badge": store_badge(st),
+            "title": title,
+            "url": url,
+            "image": img_main,
+            "image_fallback": img_fb,
+            "ends_at": ends_at,
+            "is_new": is_new(created_at),
+            "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
+            "created_at": created_at,
+            "expired": not is_active_end(ends_at),
+            "time_left": time_left_label(ends_at),
+            "discount_pct": discount_pct,
+            "price_old": price_old,
+            "price_new": price_new,
+            "currency": currency,
+            "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
     })
 
 
