@@ -2057,73 +2057,77 @@ PAGE = Template("""
             </div>
         </div>
         {% endif %}
-        
         {% if kind in ["all", "deals"] and hot|length > 0 %}
-        <div class="section">
-            <div class="section-header">
-                <span class="section-icon">💸</span>
-                <h2 class="section-title">Hot Deals 70%+</h2>
-                <span class="section-count">{{ hot|length }}</span>
-            </div>
-            
-            <div class="games-grid">
-                {% for game in hot %}
-                <div class="game-card">
-                    <div class="game-image-container">
-                        <div class="store-badge store-{{ game.store }}">
-                            {% if game.store == 'steam' %}STEAM
-                            {% elif game.store == 'epic' %}EPIC
-                            {% elif game.store == 'gog' %}GOG
-                            {% elif game.store == 'prime' %}PRIME
-                            {% else %}{{ game.store|upper }}
-                            {% endif %}
-                        </div>
-                        
-                        {% if game.image %}
-                        <img src="{{ game.image }}" alt="{{ game.title }}" class="game-image" loading="lazy">
-                        {% else %}
-                        <div class="image-placeholder">
-                            <div class="image-placeholder-icon">🎮</div>
-                        </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="game-content">
-                        <h3 class="game-title">{{ game.title }}</h3>
-                        
-                        <div class="game-meta">
-                            {% if game.discount_pct %}
-                            <span class="meta-tag tag-discount">-{{ game.discount_pct }}%</span>
-                            {% endif %}
-                            {% if game.currency_sym and game.price_new_fmt %}
-<div class="game-timer" style="display:flex;gap:10px;align-items:center;justify-content:space-between;">
-  <div>
-    {% if game.price_old_fmt %}
-      <span style="opacity:.8;text-decoration:line-through;">
-        {{ game.currency_sym }}{{ game.price_old_fmt }}
-      </span>
-      <span style="margin:0 6px;opacity:.6;">→</span>
-    {% endif %}
-    <span class="timer-time">{{ game.currency_sym }}{{ game.price_new_fmt }}</span>
+<div class="section">
+  <div class="section-header">
+    <span class="section-icon">💸</span>
+    <h2 class="section-title">Hot Deals 70%+</h2>
+    <span class="section-count">{{ hot|length }}</span>
   </div>
-                {% endif %}
-                            {% if game.is_new %}<span class="meta-tag tag-new">NEW</span>{% endif %}
-                        </div>
-                        
-                        {% if game.ends_at_fmt and not game.expired %}
-                        <div class="game-timer">
-                            ⏳ До: <span class="timer-time">{{ game.ends_at_fmt }}</span>
-                        </div>
-                        {% endif %}
-                        <a href="{{ game.go_url }}" target="_blank" class="btn">
-                            Купить →
-                        </a>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
+
+  <div class="games-grid">
+    {% for game in hot %}
+    <div class="game-card">
+      <div class="game-image-container">
+        <div class="store-badge store-{{ game.store }}">
+          {% if game.store == 'steam' %}STEAM
+          {% elif game.store == 'epic' %}EPIC
+          {% elif game.store == 'gog' %}GOG
+          {% elif game.store == 'prime' %}PRIME
+          {% else %}{{ game.store|upper }}
+          {% endif %}
+        </div>
+
+        {% if game.image %}
+          <img src="{{ game.image }}" alt="{{ game.title }}" class="game-image" loading="lazy">
+        {% else %}
+          <div class="image-placeholder">
+            <div class="image-placeholder-icon">🎮</div>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="game-content">
+        <h3 class="game-title">{{ game.title }}</h3>
+
+        <div class="game-meta" style="align-items:center;justify-content:space-between;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            {% if game.discount_pct %}
+              <span class="meta-tag tag-discount">-{{ game.discount_pct }}%</span>
+            {% endif %}
+            {% if game.is_new %}
+              <span class="meta-tag tag-new">NEW</span>
+            {% endif %}
+          </div>
+
+          {% if game.currency_sym and game.price_new_fmt %}
+          <div style="font-size:0.85rem;color:var(--text-secondary);font-weight:700;white-space:nowrap;">
+            {% if game.price_old_fmt %}
+              <span style="opacity:.75;text-decoration:line-through;">
+                {{ game.currency_sym }}{{ game.price_old_fmt }}
+              </span>
+              <span style="margin:0 6px;opacity:.6;">→</span>
+            {% endif %}
+            <span style="color:var(--text-primary);">
+              {{ game.currency_sym }}{{ game.price_new_fmt }}
+            </span>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if game.ends_at_fmt and not game.expired %}
+        <div class="game-timer">
+          ⏳ До: <span class="timer-time">{{ game.ends_at_fmt }}</span>
         </div>
         {% endif %}
+
+        <a href="{{ game.go_url }}" target="_blank" class="btn">Купить →</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
         
         {% if kind in ["all", "free"] and free_games is defined and free_games|length > 0 %}
         <div class="section">
