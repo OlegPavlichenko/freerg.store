@@ -2807,6 +2807,20 @@ def debug_images(limit: int = 5):
         }
     }
 
+@app.get("/debug_hot")
+def debug_hot():
+    conn = db()
+    total = conn.execute("SELECT COUNT(*) FROM deals WHERE kind='hot_deal'").fetchone()[0]
+    rows = conn.execute("""
+        SELECT id, store, title
+        FROM deals
+        WHERE kind='hot_deal'
+        LIMIT 50
+    """).fetchall()
+    conn.close()
+    return {"total_hot_deal": total, "sample": rows[:10]}
+
+
 @app.on_event("shutdown")
 async def on_shutdown():
     try:
