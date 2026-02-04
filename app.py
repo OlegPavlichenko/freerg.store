@@ -2095,18 +2095,7 @@ PAGE = Template("""
                             {% if game.discount_pct %}
                             <span class="meta-tag tag-discount">-{{ game.discount_pct }}%</span>
                             {% endif %}
-                            {% if game.price_text %}
-                              <span class="meta-tag">💸 {{ game.price_text }}</span>
-                            {% endif %}
-                            {% if game.is_new %}<span class="meta-tag tag-new">NEW</span>{% endif %}
-                        </div>
-                        
-                        {% if game.ends_at_fmt and not game.expired %}
-                        <div class="game-timer">
-                            ⏳ До: <span class="timer-time">{{ game.ends_at_fmt }}</span>
-                        </div>
-                        {% endif %}
-                {% if game.currency_sym and game.price_new_fmt %}
+                            {% if game.currency_sym and game.price_new_fmt %}
 <div class="game-timer" style="display:flex;gap:10px;align-items:center;justify-content:space-between;">
   <div>
     {% if game.price_old_fmt %}
@@ -2117,11 +2106,14 @@ PAGE = Template("""
     {% endif %}
     <span class="timer-time">{{ game.currency_sym }}{{ game.price_new_fmt }}</span>
   </div>
-  {% if game.discount_pct %}
-    <span class="meta-tag tag-discount">-{{ game.discount_pct }}%</span>
-  {% endif %}
-</div>
-{% endif %}
+                            {% if game.is_new %}<span class="meta-tag tag-new">NEW</span>{% endif %}
+                        </div>
+                        
+                        {% if game.ends_at_fmt and not game.expired %}
+                        <div class="game-timer">
+                            ⏳ До: <span class="timer-time">{{ game.ends_at_fmt }}</span>
+                        </div>
+                        {% endif %}
                         <a href="{{ game.go_url }}" target="_blank" class="btn">
                             Купить →
                         </a>
