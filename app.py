@@ -894,12 +894,19 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
 
     return out
 
-def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 30):
+def fetch_itad_steam_hot_deals(
+    min_cut: int = 70,
+    limit: int = 400,
+    keep: int = 20,
+    mix_70_89: int = 14,
+    mix_90_plus: int = 6,
+):
     """
     Steam hot deals через ITAD deals/v2.
-    - Пытаемся набрать keep штук с порогом скидки min_cut (по умолчанию 70%).
-    - Если набралось мало — автоматически пробуем 60%, затем 50%.
-    - Парсим изображения прямо со страниц Steam (до 10 игр).
+    Гарантируем микс:
+      - mix_70_89 штук со скидкой 70–89
+      - mix_90_plus штук со скидкой 90+
+    Остальное добиваем чем есть.
     """
     if not ITAD_API_KEY:
         return []
@@ -908,7 +915,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
     params = {
         "key": ITAD_API_KEY,
         "shops": "61",          # Steam
-        "limit": str(limit),    # сколько тянуть из API
+        "limit": str(limit),
         "sort": "-cut",
     }
 
@@ -920,89 +927,30 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
         data.get("list") or data.get("data") or data.get("items") or data.get("result") or []
     )
 
-    # Пороги: сначала 70, если мало — 60, потом 50
-    thresholds = [min_cut]
-    if min_cut > 60:
-        thresholds.append(60)
-    if min_cut > 50:
-        thresholds.append(50)
-
-    out: list[dict] = []
+    cand_70_89: list[dict] = []
+    cand_90_plus: list[dict] = []
     seen_urls = set()
 
-    slow_left = 40  # редиректы для получения app_id
-    scrape_left = 10  # парсинг страниц для получения изображений
-
-    def add_item(it: dict, deal: dict, cut: int, url: str) -> None:
-        nonlocal slow_left, scrape_left, out, seen_urls
-
+    def push_candidate(it: dict, deal: dict, cut: int, url: str) -> None:
         title = it.get("title") or it.get("name") or deal.get("title") or deal.get("name") or "Steam deal"
-
         expiry = deal.get("expiry") or it.get("expiry")
         start = deal.get("start") or it.get("start")
 
         price_obj = deal.get("price") or {}
         price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
-        currency = normalize_currency(currency)
+        currency = price_obj.get("currency") if isinstance(price_obj, dict) else None
+        currency = normalize_currency(currency)  # USD/RUB/"" (как мы обсуждали)
 
         regular_obj = deal.get("regular") or deal.get("regularPrice") or deal.get("regular_price") or {}
         old_amount = regular_obj.get("amount") if isinstance(regular_obj, dict) else None
 
-        # appid: сначала быстрый парсинг
-        app_id = extract_steam_app_id_fast(url)
-
-        # если не нашли — пробуем редиректами
-        if not app_id and slow_left > 0:
-            slow_left -= 1
-            try:
-                app_id = resolve_steam_app_id_slow(url)
-            except Exception:
-                pass
-
-        # дополнительная попытка: извлечь из deal.id
-        if not app_id:
-            deal_id_field = deal.get("id") or it.get("id") or ""
-            if isinstance(deal_id_field, str) and deal_id_field.isdigit():
-                app_id = deal_id_field
-
-        app_id = app_id or ""
-        
-        # 🔥 ГЛАВНОЕ: парсим изображения со страницы Steam
-        image_url = None
-        if app_id and scrape_left > 0:
-            scrape_left -= 1
-            try:
-                images = get_steam_images_from_page(app_id, url)
-                # Приоритет: header > hero > capsule > library
-                image_url = (
-                    images.get('header') or 
-                    images.get('hero') or 
-                    images.get('capsule') or 
-                    images.get('library')
-                )
-            except Exception as e:
-                print(f"Scrape error for {app_id}: {e}")
-        
-        # Фоллбэк на стандартные URL если парсинг не сработал
-        if not image_url and app_id:
-            cands = steam_header_candidates(app_id)
-            # Пробуем найти работающий URL
-            for cand in cands:
-                try:
-                    resp = requests.head(cand, timeout=2)
-                    if resp.status_code == 200:
-                        image_url = cand
-                        break
-                except:
-                    continue
-
-        out.append({
+        cand = {
             "store": "steam",
-            "external_id": app_id,
+            "external_id": "",           # не обязательно для hot_deal
             "kind": "hot_deal",
             "title": title,
             "url": url,
-            "image_url": image_url,
+            "image_url": None,           # пусть сайт сам строит header по appid
             "source": "itad",
             "starts_at": start,
             "ends_at": expiry,
@@ -1010,38 +958,55 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
             "price_old": old_amount,
             "price_new": price_amount,
             "currency": currency,
-        })
+        }
+
+        if 70 <= cut <= 89:
+            cand_70_89.append(cand)
+        elif cut >= 90:
+            cand_90_plus.append(cand)
+
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+
+        deal = it.get("deal") if isinstance(it.get("deal"), dict) else it
+        cut = deal.get("cut")
+        if cut is None:
+            continue
+        try:
+            cut = int(cut)
+        except Exception:
+            continue
+
+        if cut < min_cut:
+            continue
+
+        # не берём бесплатные, чтобы не дублировать free_to_keep
+        price_obj = deal.get("price") or {}
+        price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
+        if cut == 100 or price_amount == 0:
+            continue
+
+        url = deal.get("url") or it.get("url")
+        if not url or url in seen_urls:
+            continue
         seen_urls.add(url)
 
-    # Проходим по порогам, пока не наберём keep
-    for thr in thresholds:
-        for it in items:
-            if len(out) >= keep:
-                break
-            if not isinstance(it, dict):
-                continue
+        push_candidate(it, deal, cut, url)
 
-            deal = it.get("deal") if isinstance(it.get("deal"), dict) else it
-            cut = deal.get("cut")
-            if cut is None or cut < thr:
-                continue
+    import random
+    random.shuffle(cand_70_89)
+    random.shuffle(cand_90_plus)
 
-            # не берём бесплатные, чтобы не дублировать free_to_keep
-            price_obj = deal.get("price") or {}
-            price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
-            if cut == 100 or price_amount == 0:
-                continue
+    picked = cand_70_89[:mix_70_89] + cand_90_plus[:mix_90_plus]
 
-            url = deal.get("url") or it.get("url")
-            if not url or url in seen_urls:
-                continue
+    # если не хватило одной корзины — добиваем из другой
+    if len(picked) < keep:
+        rest = cand_90_plus[mix_90_plus:] + cand_70_89[mix_70_89:]
+        picked += rest[: (keep - len(picked))]
 
-            add_item(it, deal, int(cut), url)
+    return picked[:keep]
 
-        if len(out) >= keep:
-            break
-
-    return out
 
 # --------------------
 # SOURCES: Epic
