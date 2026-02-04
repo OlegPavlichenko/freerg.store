@@ -9,8 +9,9 @@ from datetime import datetime, timezone as dt_timezone, timedelta
 from zoneinfo import ZoneInfo
 from apscheduler.triggers.cron import CronTrigger
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+import random
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Template
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -26,6 +27,7 @@ TG_CHAT_ID = os.getenv("TG_CHAT_ID", "@freeredeemgames")
 ITAD_API_KEY = os.getenv("ITAD_API_KEY", "")
 
 DB_PATH = os.getenv("DB_PATH", "/opt/freerg/data/data.sqlite3")
+SITE_BASE = os.getenv("SITE_BASE", "https://freerg.store")
 
 # расписания (аккуратно)
 STEAM_MIN = int(os.getenv("STEAM_MIN", "180"))     # Steam/ITAD раз в 60 минут
@@ -87,6 +89,22 @@ def db():
         created_at TEXT DEFAULT (datetime('now'))
       )
     """)
+
+    conn.execute("""
+      CREATE TABLE IF NOT EXISTS clicks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT,
+        deal_id TEXT,
+        src TEXT,
+        utm_campaign TEXT,
+        utm_content TEXT,
+        ip TEXT,
+        user_agent TEXT,
+        referer TEXT
+      )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_deal_id ON clicks(deal_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_created ON clicks(created_at)")
 
     return conn
 
@@ -253,6 +271,29 @@ def cleanup_expired(keep_days: int = 7) -> int:
 
     conn.close()
     return len(to_delete)
+
+def log_click(conn: sqlite3.Connection, deal_id: str, request: Request, src: str | None = None, utm_campaign: str | None = None, utm_content: str | None = None):
+    try:
+        ip = request.client.host if request.client else None
+        ua = request.headers.get("user-agent")
+        ref = request.headers.get("referer")
+
+        conn.execute("""
+            INSERT INTO clicks (created_at, deal_id, src, utm_campaign, utm_content, ip, user_agent, referer)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.utcnow().isoformat(),
+            deal_id,
+            src,
+            utm_campaign,
+            utm_content,
+            ip,
+            ua,
+            ref
+        ))
+        conn.commit()
+    except Exception:
+        pass
 
 
 # --------------------
@@ -1150,6 +1191,11 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
     queued = len(rows)
     posted_count = 0
 
+def tg_go_url(deal_id: str, utm_content: str) -> str:
+    include_button = (random.random() < 0.4)  # 40% с кнопкой, 60% без
+    return f"{SITE_BASE}/go/{deal_id}?src=tg&utm_campaign=freeredeemgames&utm_content={utm_content}"
+
+
     for did, st, kind, title, url, image_url, ends_at in rows:
         st = (st or "").strip().lower()
 
@@ -1166,14 +1212,23 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
 
         # заголовок + кнопка по типу раздачи
         if kind == "free_to_keep":
-            header = "🎁 *Бесплатно навсегда*"
-            button_text = "✅ Забрать навсегда"
+          header = "🎁 *Бесплатно навсегда*"
+          button_pool = ["🧭 Открыть", "🔎 Подробности", "🎮 Забрать"]
+          utm_content = "free_forever"
         elif kind == "free_weekend":
-            header = "⏱ *Free Weekend (временно)*"
-            button_text = "🎮 Играть бесплатно"
+          header = "⏱ *Free Weekend (временно)*"
+          button_pool = ["▶️ Играть", "🧭 Открыть", "🔎 Подробности"]
+          utm_content = "free_weekend"
         else:
-            header = "🎮 *Акция*"
-            button_text = "🎮 Открыть"
+          header = "🎮 *Акция*"
+          button_pool = ["🧭 Открыть", "🔎 Подробности"]
+          utm_content = "other"
+
+        button_text = random.choice(button_pool)
+
+        site_url = tg_go_url(did, utm_content)
+
+
 
         tags = f"\n#freegame #{st} #giveaway" if st else "\n#freegame #giveaway"
 
@@ -1188,9 +1243,8 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
             f"{tags}"
         )
 
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton(button_text, url=url)]
-        ])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=site_url)]]) if include_button else None
+
 
         # выбор картинки
         photo = None
@@ -1211,7 +1265,7 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
             else:
                 await bot.send_message(
                     chat_id=TG_CHAT_ID,
-                    text=text + f"\n\n{url}",
+                    text=text,
                     parse_mode="Markdown",
                     reply_markup=kb,
                     disable_web_page_preview=False,
@@ -1881,7 +1935,7 @@ PAGE = Template("""
                         </div>
                         {% endif %}
                         
-                        <a href="{{ game.url }}" target="_blank" class="btn">
+                        <a href="{{ game.go_url }}" target="_blank" class="btn">
                             Забрать →
                         </a>
                     </div>
@@ -1935,7 +1989,7 @@ PAGE = Template("""
                         </div>
                         {% endif %}
                         
-                        <a href="{{ game.url }}" target="_blank" class="btn">
+                        <a href="{{ game.go_url }}" target="_blank" class="btn">
                             Играть →
                         </a>
                     </div>
@@ -1991,7 +2045,7 @@ PAGE = Template("""
                         </div>
                         {% endif %}
                         
-                        <a href="{{ game.url }}" target="_blank" class="btn">
+                        <a href="{{ game.go_url }}" target="_blank" class="btn">
                             Купить →
                         </a>
                     </div>
@@ -2037,7 +2091,7 @@ PAGE = Template("""
                         <div class="game-timer">{{ game.note }}</div>
                         {% endif %}
                         
-                        <a href="{{ game.url }}" target="_blank" class="btn">
+                        <a href="{{ game.go_url }}" target="_blank" class="btn">
                             Играть →
                         </a>
                     </div>
@@ -2144,6 +2198,82 @@ PAGE = Template("""
 </html>
 """)
 
+DEAL_PAGE = Template("""
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{{ title }} — FreeRG</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0a0e1a;color:#e2e8f0;margin:0;padding:24px;}
+    .wrap{max-width:720px;margin:0 auto;}
+    .card{background:#1a1f36;border:1px solid rgba(255,255,255,.1);border-radius:16px;overflow:hidden;}
+    .img{height:220px;background:#111827;display:flex;align-items:center;justify-content:center;}
+    img{width:100%;height:100%;object-fit:cover;display:block;}
+    .pad{padding:16px;}
+    .badge{display:inline-block;padding:6px 10px;border-radius:10px;font-weight:700;font-size:12px;background:rgba(255,255,255,.08);margin-bottom:10px;}
+    .btn{display:block;text-align:center;margin-top:14px;padding:12px 14px;border-radius:12px;font-weight:800;text-decoration:none;color:#fff;
+         background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);}
+    .muted{color:#94a3b8;font-size:13px;margin-top:8px}
+    a.small{color:#94a3b8}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="img">
+      {% if image %}
+        <img src="{{ image }}" alt="{{ title }}">
+      {% else %}
+        <div style="opacity:.7;font-size:48px">🎮</div>
+      {% endif %}
+    </div>
+    <div class="pad">
+      <div class="badge">{{ badge }}</div>
+      <h1 style="margin:0 0 6px 0;font-size:22px;line-height:1.2">{{ title }}</h1>
+      {% if ends_at_fmt %}
+        <div class="muted">⏳ До: {{ ends_at_fmt }}</div>
+      {% endif %}
+      <a class="btn" href="{{ out_url }}" target="_blank" rel="noopener">🔎 Открыть в магазине</a>
+      <div class="muted">Можно вернуться в список: <a class="small" href="/">freerg.store</a></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+""")
+
+@app.get("/d/{deal_id}", response_class=HTMLResponse)
+def deal_page(deal_id: str):
+    conn = db()
+    row = conn.execute("""
+        SELECT store, kind, title, url, image_url, ends_at
+        FROM deals
+        WHERE id=?
+        LIMIT 1
+    """, (deal_id,)).fetchone()
+    conn.close()
+
+    if not row:
+        return HTMLResponse("<h3 style='font-family:system-ui'>Deal not found</h3><p><a href='/'>Back</a></p>", status_code=404)
+
+    st, kind, title, url, image_url, ends_at = row
+    st = (st or "").strip().lower()
+    badge = store_badge(st)
+
+    # картинку берём по твоей логике
+    img_main, _ = images_for_row(st, url, image_url)
+
+    return DEAL_PAGE.render(
+        title=title,
+        badge=badge,
+        image=img_main,
+        out_url=url,
+        ends_at_fmt=(format_expiry(ends_at) if ends_at else ""),
+    )
+
+
 def store_badge(store: str | None) -> str:
     return {"steam": "🎮 Steam", "epic": "🟦 Epic", "gog": "🟪 GOG", "prime": "🟨 Prime"}.get(store or "", store or "Store")
 
@@ -2185,7 +2315,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         kind = "all"
 
     keep_rows = conn.execute("""
-        SELECT store,title,url,image_url,ends_at,created_at
+        SELECT id,store,title,url,image_url,ends_at,created_at
         FROM deals
         WHERE kind='free_to_keep'
         ORDER BY created_at DESC
@@ -2193,7 +2323,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     """).fetchall()
 
     weekend_rows = conn.execute("""
-        SELECT store,title,url,image_url,ends_at,created_at
+        SELECT id,store,title,url,image_url,ends_at,created_at
         FROM deals
         WHERE kind='free_weekend'
         ORDER BY created_at DESC
@@ -2201,7 +2331,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     """).fetchall()
 
     hot_rows = conn.execute("""
-        SELECT store,title,url,image_url,ends_at,created_at,discount_pct,price_old,price_new,currency
+        SELECT id,store,title,url,image_url,ends_at,created_at,discount_pct,price_old,price_new,currency
         FROM deals
         WHERE kind='hot_deal'
         ORDER BY RANDOM()
@@ -2228,74 +2358,90 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         return (row_store or "").strip().lower() == store
 
     # keep
-    keep = []
-    for r in keep_rows:
-        if not (allow_time(r[4]) and allow_store(r[0])):
-            continue
-        img_main, img_fb = images_for_row(r[0], r[2], r[3])
+keep = []
+for r in keep_rows:
+    did, st, title, url, image_url, ends_at, created_at = r
 
-        keep.append({
-            "store": (r[0] or "").strip().lower(),
-            "store_badge": store_badge(r[0]),
-            "title": r[1],
-            "url": r[2],
-            "image": img_main,
-            "image_fallback": img_fb,
-            "ends_at": r[4],
-            "is_new": is_new(r[5]),
-            "ends_at_fmt": format_expiry(r[4]),
-            "created_at": r[5],
-            "expired": not is_active_end(r[4]),
-            "time_left": time_left_label(r[4]),
-        })
+    if not (allow_time(ends_at) and allow_store(st)):
+        continue
 
-    # weekend
-    weekend = []
-    for r in weekend_rows:
-        if not (allow_time(r[4]) and allow_store(r[0])):
-            continue
-        img_main, img_fb = images_for_row(r[0], r[2], r[3])
+    img_main, img_fb = images_for_row(st, url, image_url)
 
-        weekend.append({
-            "store": (r[0] or "").strip().lower(),
-            "store_badge": store_badge(r[0]),
-            "title": r[1],
-            "url": r[2],
-            "image": img_main,
-            "image_fallback": img_fb,
-            "ends_at": r[4],
-            "is_new": is_new(r[5]),
-            "ends_at_fmt": format_expiry(r[4]),
-            "created_at": r[5],
-            "expired": not is_active_end(r[4]),
-            "time_left": time_left_label(r[4]),
-        })
+    keep.append({
+        "id": did,
+        "store": (st or "").strip().lower(),
+        "store_badge": store_badge(st),
+        "title": title,
+        "url": url,  # оригинальная ссылка магазина (может пригодиться)
+        "image": img_main,
+        "image_fallback": img_fb,
+        "ends_at": ends_at,
+        "is_new": is_new(created_at),
+        "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
+        "created_at": created_at,
+        "expired": not is_active_end(ends_at),
+        "time_left": time_left_label(ends_at),
+        "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=keep",
+    })
 
-    # hot (по магазину фильтруем, по времени можно НЕ фильтровать)
-    hot = []
-    for r in hot_rows:
-        if not allow_store(r[0]):
-            continue
-        img_main, img_fb = images_for_row(r[0], r[2], r[3])
+# weekend
+weekend = []
+for r in weekend_rows:
+    did, st, title, url, image_url, ends_at, created_at = r
 
-        hot.append({
-            "store": (r[0] or "").strip().lower(),
-            "store_badge": store_badge(r[0]),
-            "title": r[1],
-            "url": r[2],
-            "image": img_main,
-            "image_fallback": img_fb,
-            "ends_at": r[4],
-            "is_new": is_new(r[5]),
-            "ends_at_fmt": format_expiry(r[4]),
-            "created_at": r[5],
-            "expired": not is_active_end(r[4]),
-            "time_left": time_left_label(r[4]),
-            "discount_pct": r[6],
-            "price_old": r[7],
-            "price_new": r[8],
-            "currency": r[9],
-        })
+    if not (allow_time(ends_at) and allow_store(st)):
+        continue
+
+    img_main, img_fb = images_for_row(st, url, image_url)
+
+    weekend.append({
+        "id": did,
+        "store": (st or "").strip().lower(),
+        "store_badge": store_badge(st),
+        "title": title,
+        "url": url,
+        "image": img_main,
+        "image_fallback": img_fb,
+        "ends_at": ends_at,
+        "is_new": is_new(created_at),
+        "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
+        "created_at": created_at,
+        "expired": not is_active_end(ends_at),
+        "time_left": time_left_label(ends_at),
+        "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=weekend",
+    })
+
+# hot (по магазину фильтруем, по времени можно НЕ фильтровать)
+hot = []
+for r in hot_rows:
+    did, st, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency = r
+
+    if not allow_store(st):
+        continue
+
+    img_main, img_fb = images_for_row(st, url, image_url)
+
+    hot.append({
+        "id": did,
+        "store": (st or "").strip().lower(),
+        "store_badge": store_badge(st),
+        "title": title,
+        "url": url,
+        "image": img_main,
+        "image_fallback": img_fb,
+        "ends_at": ends_at,
+        "is_new": is_new(created_at),
+        "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
+        "created_at": created_at,
+        "expired": not is_active_end(ends_at),
+        "time_left": time_left_label(ends_at),
+        "discount_pct": discount_pct,
+        "price_old": price_old,
+        "price_new": price_new,
+        "currency": currency,
+        "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
+    })
+
 
     keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
     weekend.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
@@ -2345,6 +2491,21 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
 # --------------------
 # API endpoints
 # --------------------
+
+@app.get("/go/{deal_id}")
+def go_deal(deal_id: str, request: Request):
+    conn = db()
+
+    # логируем клик (src/utm берём из query)
+    src = request.query_params.get("src")
+    utm_campaign = request.query_params.get("utm_campaign")
+    utm_content = request.query_params.get("utm_content")
+    log_click(conn, deal_id, request, src=src, utm_campaign=utm_campaign, utm_content=utm_content)
+
+    conn.close()
+    return RedirectResponse(url=f"/d/{deal_id}", status_code=302)
+
+
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"ok": True}
@@ -2353,6 +2514,80 @@ def health():
 @app.get("/debug_tg")
 def debug_tg():
     return {"bot_token_present": bool(TG_BOT_TOKEN), "chat_id": TG_CHAT_ID}
+
+@app.get("/stats")
+def stats(days: int = 7, top: int = 15):
+    # days=7 по умолчанию; можно /stats?days=1 для суток
+    if days < 1:
+        days = 1
+    if days > 90:
+        days = 90
+    if top < 1:
+        top = 1
+    if top > 50:
+        top = 50
+
+    conn = db()
+
+    # всего кликов за N дней
+    total = conn.execute("""
+        SELECT COUNT(*)
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+    """, (f"-{days} days",)).fetchone()[0]
+
+    # клики за последние 24 часа (отдельно)
+    day_total = conn.execute("""
+        SELECT COUNT(*)
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', '-1 day')
+    """).fetchone()[0]
+
+    # топ по deal_id за N дней + подтягиваем title/store
+    rows = conn.execute("""
+        SELECT c.deal_id,
+               COUNT(*) as cnt,
+               d.title,
+               d.store,
+               d.kind
+        FROM clicks c
+        LEFT JOIN deals d ON d.id = c.deal_id
+        WHERE datetime(c.created_at) >= datetime('now', ?)
+        GROUP BY c.deal_id
+        ORDER BY cnt DESC
+        LIMIT ?
+    """, (f"-{days} days", top)).fetchall()
+
+    # дневная динамика по дням (последние N дней)
+    series = conn.execute("""
+        SELECT substr(created_at, 1, 10) as day,
+               COUNT(*) as cnt
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+        GROUP BY day
+        ORDER BY day ASC
+    """, (f"-{days} days",)).fetchall()
+
+    conn.close()
+
+    top_items = []
+    for deal_id, cnt, title, store, kind in rows:
+        top_items.append({
+            "deal_id": deal_id,
+            "clicks": cnt,
+            "title": title or "(не найдено в deals)",
+            "store": store or "",
+            "kind": kind or "",
+            "link": f"{SITE_BASE}/d/{deal_id}",
+        })
+
+    return {
+        "range_days": days,
+        "clicks_last_24h": day_total,
+        "clicks_range_total": total,
+        "daily": [{"day": d, "clicks": c} for d, c in series],
+        "top": top_items,
+    }
 
 
 @app.get("/count")
