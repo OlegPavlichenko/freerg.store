@@ -2106,6 +2106,7 @@ PAGE = Template("""
     {% endif %}
     <span class="timer-time">{{ game.currency_sym }}{{ game.price_new_fmt }}</span>
   </div>
+                {% endif %}
                             {% if game.is_new %}<span class="meta-tag tag-new">NEW</span>{% endif %}
                         </div>
                         
@@ -2405,7 +2406,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
            discount_pct, price_old, price_new, currency
     FROM deals
     WHERE kind='hot_deal'
-      AND discount_pct BETWEEN 70 AND 89
+      AND discount_pct 70 >= 89
     ORDER BY RANDOM()
     LIMIT 14
 """).fetchall()
