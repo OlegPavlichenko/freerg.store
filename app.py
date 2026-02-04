@@ -2409,21 +2409,25 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     """).fetchall()
 
     hot_rows = conn.execute("""
-    SELECT id, store, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency
-    FROM (
-      SELECT * FROM deals
-      WHERE kind='hot_deal' AND discount_pct BETWEEN 70 AND 89
-      ORDER BY RANDOM()
-      LIMIT 10
-        )
-        UNION ALL
-        SELECT * FROM (
-          SELECT * FROM deals
-          WHERE kind='hot_deal' AND discount_pct >= 90
-          ORDER BY RANDOM()
-          LIMIT 10
-        )
-    """).fetchall()
+    SELECT id, store, title, url, image_url, ends_at, created_at,
+           discount_pct, price_old, price_new, currency
+    FROM deals
+    WHERE kind='hot_deal'
+      AND discount_pct BETWEEN 70 AND 89
+    ORDER BY RANDOM()
+    LIMIT 14
+""").fetchall()
+
+    hot_rows += conn.execute("""
+    SELECT id, store, title, url, image_url, ends_at, created_at,
+           discount_pct, price_old, price_new, currency
+    FROM deals
+    WHERE kind='hot_deal'
+      AND discount_pct >= 90
+    ORDER BY RANDOM()
+    LIMIT 6
+""").fetchall()
+
 
 
     free_games_rows = conn.execute("""
