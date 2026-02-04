@@ -2406,7 +2406,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
            discount_pct, price_old, price_new, currency
     FROM deals
     WHERE kind='hot_deal'
-      AND discount_pct 70 >= 89
+      AND discount_pct >= 70 AND <= 89
     ORDER BY RANDOM()
     LIMIT 14
 """).fetchall()
