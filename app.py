@@ -1093,7 +1093,7 @@ def fetch_epic(locale=None, country=None):
         price = (((e.get("price") or {}).get("totalPrice")) or {})
         discount_price = price.get("discountPrice")
 
-        kind = "free_to_keep" if discount_price == 0 else "free_weekend"
+        kind = "free_to_keep"
 
         out.append({
             "store": "epic",
