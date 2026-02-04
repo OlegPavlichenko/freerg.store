@@ -2357,11 +2357,11 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         return (row_store or "").strip().lower() == store
 
     # keep
-keep = []
-for r in keep_rows:
-    did, st, title, url, image_url, ends_at, created_at = r
+    keep = []
+    for r in keep_rows:
+      did, st, title, url, image_url, ends_at, created_at = r
 
-    if not (allow_time(ends_at) and allow_store(st)):
+      if not (allow_time(ends_at) and allow_store(st)):
         continue
 
     img_main, img_fb = images_for_row(st, url, image_url)
@@ -2384,11 +2384,11 @@ for r in keep_rows:
     })
 
 # weekend
-weekend = []
-for r in weekend_rows:
-    did, st, title, url, image_url, ends_at, created_at = r
+    weekend = []
+    for r in weekend_rows:
+      did, st, title, url, image_url, ends_at, created_at = r
 
-    if not (allow_time(ends_at) and allow_store(st)):
+      if not (allow_time(ends_at) and allow_store(st)):
         continue
 
     img_main, img_fb = images_for_row(st, url, image_url)
@@ -2411,11 +2411,11 @@ for r in weekend_rows:
     })
 
 # hot (по магазину фильтруем, по времени можно НЕ фильтровать)
-hot = []
-for r in hot_rows:
-    did, st, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency = r
+    hot = []
+    for r in hot_rows:
+      did, st, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency = r
 
-    if not allow_store(st):
+      if not allow_store(st):
         continue
 
     img_main, img_fb = images_for_row(st, url, image_url)
