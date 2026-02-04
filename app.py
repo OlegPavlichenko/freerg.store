@@ -318,6 +318,43 @@ def price_line(old, new, cur):
         return f"{n} {cur}".strip()
     return f"{o} {cur}".strip()
 
+def normalize_currency(cur: str | None) -> str:
+    c = (cur or "").strip().upper()
+    if c in ("USD", "$"):
+        return "USD"
+    if c in ("RUB", "RUR", "₽"):
+        return "RUB"
+    return ""  # всё остальное не показываем
+
+def currency_symbol(cur: str | None) -> str:
+    c = normalize_currency(cur)
+    return "$" if c == "USD" else ("₽" if c == "RUB" else "")
+
+def fmt_price(x):
+    if x is None:
+        return None
+    try:
+        v = float(x)
+        if v.is_integer():
+            return str(int(v))
+        return f"{v:.2f}".rstrip("0").rstrip(".")
+    except Exception:
+        return str(x)
+
+def price_line(old, new, cur):
+    sym = currency_symbol(cur)
+    if not sym:
+        return ""  # скрываем непонятные валюты полностью
+    o = fmt_price(old)
+    n = fmt_price(new)
+    if o and n:
+        return f"{sym}{o} → {sym}{n}"
+    if n:
+        return f"{sym}{n}"
+    if o:
+        return f"{sym}{o}"
+    return ""
+
 
 # --------------------
 # Steam image helpers
@@ -906,7 +943,7 @@ def fetch_itad_steam_hot_deals(min_cut: int = 70, limit: int = 200, keep: int = 
 
         price_obj = deal.get("price") or {}
         price_amount = price_obj.get("amount") if isinstance(price_obj, dict) else None
-        currency = price_obj.get("currency") if isinstance(price_obj, dict) else None
+        currency = normalize_currency(currency)
 
         regular_obj = deal.get("regular") or deal.get("regularPrice") or deal.get("regular_price") or {}
         old_amount = regular_obj.get("amount") if isinstance(regular_obj, dict) else None
