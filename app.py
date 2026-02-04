@@ -294,6 +294,29 @@ def log_click(conn: sqlite3.Connection, deal_id: str, request: Request, src: str
         conn.commit()
     except Exception:
         pass
+    
+def fmt_price(x):
+    if x is None:
+        return None
+    try:
+        v = float(x)
+        if v.is_integer():
+            return str(int(v))
+        return f"{v:.2f}".rstrip("0").rstrip(".")
+    except Exception:
+        return str(x)
+
+def price_line(old, new, cur):
+    o = fmt_price(old)
+    n = fmt_price(new)
+    if not n and not o:
+        return ""
+    cur = (cur or "").upper()
+    if o and n:
+        return f"{o} → {n} {cur}".strip()
+    if n:
+        return f"{n} {cur}".strip()
+    return f"{o} {cur}".strip()
 
 
 # --------------------
@@ -2035,6 +2058,9 @@ PAGE = Template("""
                             {% if game.discount_pct %}
                             <span class="meta-tag tag-discount">-{{ game.discount_pct }}%</span>
                             {% endif %}
+                            {% if game.price_text %}
+                              <span class="meta-tag">💸 {{ game.price_text }}</span>
+                            {% endif %}
                             {% if game.is_new %}<span class="meta-tag tag-new">NEW</span>{% endif %}
                         </div>
                         
@@ -2234,7 +2260,7 @@ DEAL_PAGE = Template("""
       {% if ends_at_fmt %}
         <div class="muted">⏳ До: {{ ends_at_fmt }}</div>
       {% endif %}
-      <a class="btn" href="{{ out_url }}" target="_blank" rel="noopener">🔎 Открыть в магазине</a>
+      <a class="btn" href="{{ out_route }}">🔎 Открыть в магазине</a>
       <div class="muted">Можно вернуться в список: <a class="small" href="/">freerg.store</a></div>
     </div>
   </div>
@@ -2270,6 +2296,7 @@ def deal_page(deal_id: str):
         image=img_main,
         out_url=url,
         ends_at_fmt=(format_expiry(ends_at) if ends_at else ""),
+        out_route=f"{SITE_BASE}/out/{deal_id}",
     )
 
 
@@ -2437,6 +2464,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             "price_old": price_old,
             "price_new": price_new,
             "currency": currency,
+            "price_text": price_line(price_old, price_new, currency),
             "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
     })
 
@@ -2512,6 +2540,145 @@ def health():
 @app.get("/debug_tg")
 def debug_tg():
     return {"bot_token_present": bool(TG_BOT_TOKEN), "chat_id": TG_CHAT_ID}
+
+STATS_PAGE = Template("""
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Stats — FreeRG</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0a0e1a;color:#e2e8f0;margin:0;padding:24px}
+    .wrap{max-width:1100px;margin:0 auto}
+    .row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+    .card{background:#1a1f36;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:14px}
+    .h{font-weight:900;font-size:22px;margin:0}
+    .muted{color:#94a3b8;font-size:13px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left;font-size:14px}
+    a{color:#a5b4fc;text-decoration:none}
+    .bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+    .bar > div{height:100%;background:linear-gradient(135deg,#667eea,#764ba2)}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:900px){.row{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row">
+    <div class="card">
+      <div class="muted">Клики за 24 часа</div>
+      <div class="h">{{ clicks_24h }}</div>
+    </div>
+    <div class="card">
+      <div class="muted">Клики за {{ days }} дней</div>
+      <div class="h">{{ clicks_total }}</div>
+    </div>
+    <div class="card">
+      <div class="muted">Диапазон</div>
+      <div class="h">{{ days }}d</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="h" style="font-size:18px">Динамика</div>
+      <div class="muted">последние {{ days }} дней</div>
+      <table>
+        <thead><tr><th>День</th><th>Клики</th><th style="width:45%"> </th></tr></thead>
+        <tbody>
+        {% for d in daily %}
+          <tr>
+            <td>{{ d.day }}</td>
+            <td><b>{{ d.clicks }}</b></td>
+            <td>
+              <div class="bar"><div style="width: {{ d.pct }}%"></div></div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="h" style="font-size:18px">Топ игр</div>
+      <div class="muted">клики на карточку (по deal)</div>
+      <table>
+        <thead><tr><th>#</th><th>Игра</th><th>Store</th><th>Клики</th></tr></thead>
+        <tbody>
+        {% for it in top %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td><a href="{{ it.link }}" target="_blank">{{ it.title }}</a></td>
+            <td>{{ it.store }}</td>
+            <td><b>{{ it.clicks }}</b></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="muted" style="margin-top:14px">
+    Параметры: <a href="/stats_html?days=1">1 день</a> · <a href="/stats_html?days=7">7 дней</a> · <a href="/stats_html?days=30">30 дней</a>
+  </div>
+</div>
+</body>
+</html>
+""")
+
+@app.get("/stats_html", response_class=HTMLResponse)
+def stats_html(days: int = 7, top: int = 15):
+    if days < 1: days = 1
+    if days > 90: days = 90
+    if top < 1: top = 1
+    if top > 50: top = 50
+
+    conn = db()
+
+    clicks_total = conn.execute("""
+        SELECT COUNT(*) FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+    """, (f"-{days} days",)).fetchone()[0]
+
+    clicks_24h = conn.execute("""
+        SELECT COUNT(*) FROM clicks
+        WHERE datetime(created_at) >= datetime('now', '-1 day')
+    """).fetchone()[0]
+
+    series = conn.execute("""
+        SELECT substr(created_at, 1, 10) as day, COUNT(*) as cnt
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+        GROUP BY day
+        ORDER BY day ASC
+    """, (f"-{days} days",)).fetchall()
+
+    rows = conn.execute("""
+        SELECT c.deal_id, COUNT(*) as cnt, d.title, d.store
+        FROM clicks c
+        LEFT JOIN deals d ON d.id = c.deal_id
+        WHERE datetime(c.created_at) >= datetime('now', ?)
+        GROUP BY c.deal_id
+        ORDER BY cnt DESC
+        LIMIT ?
+    """, (f"-{days} days", top)).fetchall()
+
+    conn.close()
+
+    max_cnt = max([c for _, c in series], default=1)
+    daily = [{"day": d, "clicks": c, "pct": int((c / max_cnt) * 100)} for d, c in series]
+
+    top_items = [{
+        "title": (title or "(не найдено)"),
+        "store": (store or ""),
+        "clicks": cnt,
+        "link": f"{SITE_BASE}/d/{deal_id}",
+    } for deal_id, cnt, title, store in rows]
+
+    return STATS_PAGE.render(days=days, clicks_total=clicks_total, clicks_24h=clicks_24h, daily=daily, top=top_items)
+
 
 @app.get("/stats")
 def stats(days: int = 7, top: int = 15):
@@ -2806,6 +2973,84 @@ def debug_images(limit: int = 5):
             "has_working_candidates": sum(1 for r in result if r["working_candidates"]),
         }
     }
+
+@app.get("/stats_funnel")
+def stats_funnel(days: int = 7, top: int = 15):
+    if days < 1: days = 1
+    if days > 90: days = 90
+    if top < 1: top = 1
+    if top > 50: top = 50
+
+    conn = db()
+
+    # клики по источникам
+    by_src = conn.execute("""
+        SELECT COALESCE(src,'') as src, COUNT(*) as cnt
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+        GROUP BY src
+        ORDER BY cnt DESC
+    """, (f"-{days} days",)).fetchall()
+
+    # топ по "конверсии": out / tg
+    rows = conn.execute("""
+        WITH tg AS (
+          SELECT deal_id, COUNT(*) cnt
+          FROM clicks
+          WHERE src='tg' AND datetime(created_at) >= datetime('now', ?)
+          GROUP BY deal_id
+        ),
+        out AS (
+          SELECT deal_id, COUNT(*) cnt
+          FROM clicks
+          WHERE src='out' AND datetime(created_at) >= datetime('now', ?)
+          GROUP BY deal_id
+        )
+        SELECT d.id, d.title, d.store,
+               COALESCE(tg.cnt,0) as tg_clicks,
+               COALESCE(out.cnt,0) as out_clicks
+        FROM deals d
+        LEFT JOIN tg ON tg.deal_id = d.id
+        LEFT JOIN out ON out.deal_id = d.id
+        WHERE COALESCE(tg.cnt,0) > 0
+        ORDER BY (1.0*COALESCE(out.cnt,0)/tg.cnt) DESC, tg_clicks DESC
+        LIMIT ?
+    """, (f"-{days} days", f"-{days} days", top)).fetchall()
+
+    conn.close()
+
+    funnel = [{"src": s, "clicks": c} for s, c in by_src]
+    top_conv = []
+    for did, title, store, tg_clicks, out_clicks in rows:
+        conv = (out_clicks / tg_clicks) if tg_clicks else 0.0
+        top_conv.append({
+            "deal_id": did,
+            "title": title or "(no title)",
+            "store": store or "",
+            "tg_clicks": tg_clicks,
+            "out_clicks": out_clicks,
+            "conv_tg_to_store": round(conv, 3),
+            "link": f"{SITE_BASE}/d/{did}",
+        })
+
+    return {"range_days": days, "by_src": funnel, "top_conversion": top_conv}
+
+
+@app.get("/out/{deal_id}")
+def out_deal(deal_id: str, request: Request):
+    conn = db()
+    row = conn.execute("SELECT url FROM deals WHERE id=? LIMIT 1", (deal_id,)).fetchone()
+    if not row:
+        conn.close()
+        return RedirectResponse(url="/", status_code=302)
+
+    (url,) = row
+
+    # логируем как отдельное событие: src=out
+    log_click(conn, deal_id, request, src="out", utm_campaign="freeredeemgames", utm_content="out")
+    conn.close()
+    return RedirectResponse(url=url, status_code=302)
+
 
 @app.get("/debug_hot")
 def debug_hot():
