@@ -1357,7 +1357,7 @@ async def job_async(store: str = "steam"):
             st = (store or "").strip().lower()
 
             if st == "steam":
-                deals = fetch_itad_steam() + fetch_itad_steam_hot_deals(70)
+                deals = fetch_itad_steam() + fetch_itad_steam_hot_deals(70, keep=120)
                 new_items = save_deals(deals)
                 tg = await post_unposted_to_telegram(limit=POST_LIMIT, store="steam")
 
