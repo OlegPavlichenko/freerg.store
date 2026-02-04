@@ -2106,7 +2106,22 @@ PAGE = Template("""
                             ⏳ До: <span class="timer-time">{{ game.ends_at_fmt }}</span>
                         </div>
                         {% endif %}
-                        
+                {% if game.currency_sym and game.price_new_fmt %}
+<div class="game-timer" style="display:flex;gap:10px;align-items:center;justify-content:space-between;">
+  <div>
+    {% if game.price_old_fmt %}
+      <span style="opacity:.8;text-decoration:line-through;">
+        {{ game.currency_sym }}{{ game.price_old_fmt }}
+      </span>
+      <span style="margin:0 6px;opacity:.6;">→</span>
+    {% endif %}
+    <span class="timer-time">{{ game.currency_sym }}{{ game.price_new_fmt }}</span>
+  </div>
+  {% if game.discount_pct %}
+    <span class="meta-tag tag-discount">-{{ game.discount_pct }}%</span>
+  {% endif %}
+</div>
+{% endif %}
                         <a href="{{ game.go_url }}" target="_blank" class="btn">
                             Купить →
                         </a>
@@ -2394,11 +2409,22 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     """).fetchall()
 
     hot_rows = conn.execute("""
-        SELECT id, store, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency        FROM deals
-        WHERE kind='hot_deal'
-        ORDER BY RANDOM()
-        LIMIT 20
+    SELECT id, store, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency
+    FROM (
+      SELECT * FROM deals
+      WHERE kind='hot_deal' AND discount_pct BETWEEN 70 AND 89
+      ORDER BY RANDOM()
+      LIMIT 10
+        )
+        UNION ALL
+        SELECT * FROM (
+          SELECT * FROM deals
+          WHERE kind='hot_deal' AND discount_pct >= 90
+          ORDER BY RANDOM()
+          LIMIT 10
+        )
     """).fetchall()
+
 
     free_games_rows = conn.execute("""
         SELECT store,title,url,image_url,note
@@ -2502,6 +2528,9 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             "price_new": price_new,
             "currency": currency,
             "price_text": price_line(price_old, price_new, currency),
+            "price_old_fmt": fmt_price(price_old),
+            "price_new_fmt": fmt_price(price_new),
+            "currency_sym": currency_symbol(currency),
             "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
     })
 
