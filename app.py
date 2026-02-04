@@ -1155,6 +1155,10 @@ def save_deals(deals: list[dict]):
     conn.close()
     return new_items
 
+def tg_go_url(deal_id: str, utm_content: str) -> str:
+    include_button = (random.random() < 0.4)  # 40% с кнопкой, 60% без
+    return f"{SITE_BASE}/go/{deal_id}?src=tg&utm_campaign=freeredeemgames&utm_content={utm_content}"
+
 async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None = None):
     """
     Постим kind in ('free_to_keep', 'free_weekend').
@@ -1190,11 +1194,6 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
     rows = conn.execute(sql, tuple(params)).fetchall()
     queued = len(rows)
     posted_count = 0
-
-def tg_go_url(deal_id: str, utm_content: str) -> str:
-    include_button = (random.random() < 0.4)  # 40% с кнопкой, 60% без
-    return f"{SITE_BASE}/go/{deal_id}?src=tg&utm_campaign=freeredeemgames&utm_content={utm_content}"
-
 
     for did, st, kind, title, url, image_url, ends_at in rows:
         st = (st or "").strip().lower()
