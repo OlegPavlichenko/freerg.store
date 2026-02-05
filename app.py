@@ -920,6 +920,15 @@ def fetch_itad_steam_hot_deals(
     }
 
     r = requests.get(endpoint, params=params, timeout=25)
+    r = requests.get(endpoint, params=params, timeout=25)
+
+    print("ITAD URL:", r.url)
+    print("ITAD STATUS:", r.status_code)
+
+    if r.status_code >= 400:
+        print("ITAD ERROR BODY:", (r.text or "")[:800])
+
+
     r.raise_for_status()
     data = r.json()
 
