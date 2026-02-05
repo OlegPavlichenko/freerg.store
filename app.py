@@ -2370,26 +2370,71 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         LIMIT 150
     """).fetchall()
 
-    hot_rows = conn.execute("""
-    SELECT id, store, title, url, image_url, ends_at, created_at,
-           discount_pct, price_old, price_new, currency
-    FROM deals
-    WHERE kind='hot_deal'
-      AND discount_pct BETWEEN 70 AND 89
-    ORDER BY RANDOM()
-    LIMIT 14
-""").fetchall()
+HOT_TOTAL = 20
+HOT_90 = 6                 # 30% от 20
+HOT_70_89 = HOT_TOTAL - HOT_90  # 14
 
-    hot_rows += conn.execute("""
-    SELECT id, store, title, url, image_url, ends_at, created_at,
-           discount_pct, price_old, price_new, currency
-    FROM deals
-    WHERE kind='hot_deal'
-      AND discount_pct >= 90
-    ORDER BY RANDOM()
-    LIMIT 6
-""").fetchall()
+# 1) Берём 6 штук 90%+
+hot_rows_90 = conn.execute("""
+  SELECT id, store, title, url, image_url, ends_at, created_at,
+         discount_pct, price_old, price_new, currency
+  FROM deals
+  WHERE kind='hot_deal' AND discount_pct >= 90
+  ORDER BY RANDOM()
+  LIMIT ?
+""", (HOT_90,)).fetchall()
 
+picked_ids = {r[0] for r in hot_rows_90}
+
+# 2) Берём 14 штук 70–89% (не повторяя уже выбранные)
+hot_rows_70_89 = conn.execute(f"""
+  SELECT id, store, title, url, image_url, ends_at, created_at,
+         discount_pct, price_old, price_new, currency
+  FROM deals
+  WHERE kind='hot_deal'
+    AND discount_pct BETWEEN 70 AND 89
+    {"AND id NOT IN (" + ",".join(["?"]*len(picked_ids)) + ")" if picked_ids else ""}
+  ORDER BY RANDOM()
+  LIMIT ?
+""", (*picked_ids, HOT_70_89) if picked_ids else (HOT_70_89,)).fetchall()
+
+hot_rows = hot_rows_90 + hot_rows_70_89
+
+# 3) Фоллбек: если 70–89 пусто — расширяем до 70–94
+if len(hot_rows) < HOT_TOTAL:
+    need = HOT_TOTAL - len(hot_rows)
+    picked_ids = {r[0] for r in hot_rows}
+
+    hot_rows_more = conn.execute(f"""
+      SELECT id, store, title, url, image_url, ends_at, created_at,
+             discount_pct, price_old, price_new, currency
+      FROM deals
+      WHERE kind='hot_deal'
+        AND discount_pct BETWEEN 70 AND 94
+        {"AND id NOT IN (" + ",".join(["?"]*len(picked_ids)) + ")" if picked_ids else ""}
+      ORDER BY RANDOM()
+      LIMIT ?
+    """, (*picked_ids, need) if picked_ids else (need,)).fetchall()
+
+    hot_rows += hot_rows_more
+
+# 4) Фоллбек: если всё равно мало — добиваем чем угодно >=70
+if len(hot_rows) < HOT_TOTAL:
+    need = HOT_TOTAL - len(hot_rows)
+    picked_ids = {r[0] for r in hot_rows}
+
+    hot_rows_more = conn.execute(f"""
+      SELECT id, store, title, url, image_url, ends_at, created_at,
+             discount_pct, price_old, price_new, currency
+      FROM deals
+      WHERE kind='hot_deal'
+        AND discount_pct >= 70
+        {"AND id NOT IN (" + ",".join(["?"]*len(picked_ids)) + ")" if picked_ids else ""}
+      ORDER BY RANDOM()
+      LIMIT ?
+    """, (*picked_ids, need) if picked_ids else (need,)).fetchall()
+
+    hot_rows += hot_rows_more
 
 
     free_games_rows = conn.execute("""
