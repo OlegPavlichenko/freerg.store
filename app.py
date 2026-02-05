@@ -896,7 +896,7 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
 
 def fetch_itad_steam_hot_deals(
     min_cut: int = 70,
-    limit: int = 400,
+    limit: int = 200,
     keep: int = 20,
     mix_70_89: int = 14,
     mix_90_plus: int = 6,
