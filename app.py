@@ -3134,15 +3134,9 @@ def out_deal(deal_id: str, request: Request):
 def debug_hot():
     conn = db()
     total = conn.execute("SELECT COUNT(*) FROM deals WHERE kind='hot_deal'").fetchone()[0]
-    rows = conn.execute("""
-        SELECT id, store, title
-        FROM deals
-        WHERE kind='hot_deal'
-        LIMIT 50
-    """).fetchall()
+    sample = conn.execute("SELECT id, store, title, discount_pct FROM deals WHERE kind='hot_deal' LIMIT 5").fetchall()
     conn.close()
-    return {"total_hot_deal": total, "sample": rows[:10]}
-
+    return {"total_hot_deal": total, "sample": sample}
 
 @app.on_event("shutdown")
 async def on_shutdown():
