@@ -2370,72 +2370,62 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         LIMIT 150
     """).fetchall()
 
-HOT_TOTAL = 20
-HOT_90 = 6                 # 30% от 20
-HOT_70_89 = HOT_TOTAL - HOT_90  # 14
+    # ---- HOT DEALS VITRINA (железобетонно 30/70 + фоллбеки) ----
+    HOT_TOTAL = 20
+    HOT_90 = 6                       # 30% от 20
+    HOT_70_89 = HOT_TOTAL - HOT_90   # 14
 
-# 1) Берём 6 штук 90%+
-hot_rows_90 = conn.execute("""
-  SELECT id, store, title, url, image_url, ends_at, created_at,
-         discount_pct, price_old, price_new, currency
-  FROM deals
-  WHERE kind='hot_deal' AND discount_pct >= 90
-  ORDER BY RANDOM()
-  LIMIT ?
-""", (HOT_90,)).fetchall()
+    hot_rows = []
 
-picked_ids = {r[0] for r in hot_rows_90}
+    # 1) 90%+
+    hot_rows += conn.execute("""
+        SELECT id, store, title, url, image_url, ends_at, created_at,
+               discount_pct, price_old, price_new, currency
+        FROM deals
+        WHERE kind='hot_deal' AND discount_pct >= 90
+        ORDER BY RANDOM()
+        LIMIT ?
+    """, (HOT_90,)).fetchall()
 
-# 2) Берём 14 штук 70–89% (не повторяя уже выбранные)
-hot_rows_70_89 = conn.execute(f"""
-  SELECT id, store, title, url, image_url, ends_at, created_at,
-         discount_pct, price_old, price_new, currency
-  FROM deals
-  WHERE kind='hot_deal'
-    AND discount_pct BETWEEN 70 AND 89
-    {"AND id NOT IN (" + ",".join(["?"]*len(picked_ids)) + ")" if picked_ids else ""}
-  ORDER BY RANDOM()
-  LIMIT ?
-""", (*picked_ids, HOT_70_89) if picked_ids else (HOT_70_89,)).fetchall()
+    # 2) 70–89
+    hot_rows += conn.execute("""
+        SELECT id, store, title, url, image_url, ends_at, created_at,
+               discount_pct, price_old, price_new, currency
+        FROM deals
+        WHERE kind='hot_deal' AND discount_pct BETWEEN 70 AND 89
+        ORDER BY RANDOM()
+        LIMIT ?
+    """, (HOT_70_89,)).fetchall()
 
-hot_rows = hot_rows_90 + hot_rows_70_89
+    # 3) если мало — расширяем до 70–94
+    if len(hot_rows) < HOT_TOTAL:
+        need = HOT_TOTAL - len(hot_rows)
+        hot_rows += conn.execute("""
+            SELECT id, store, title, url, image_url, ends_at, created_at,
+                   discount_pct, price_old, price_new, currency
+            FROM deals
+            WHERE kind='hot_deal' AND discount_pct BETWEEN 70 AND 94
+            ORDER BY RANDOM()
+            LIMIT ?
+        """, (need,)).fetchall()
 
-# 3) Фоллбек: если 70–89 пусто — расширяем до 70–94
-if len(hot_rows) < HOT_TOTAL:
-    need = HOT_TOTAL - len(hot_rows)
-    picked_ids = {r[0] for r in hot_rows}
+    # 4) если всё ещё мало — добиваем >=70
+    if len(hot_rows) < HOT_TOTAL:
+        need = HOT_TOTAL - len(hot_rows)
+        hot_rows += conn.execute("""
+            SELECT id, store, title, url, image_url, ends_at, created_at,
+                   discount_pct, price_old, price_new, currency
+            FROM deals
+            WHERE kind='hot_deal' AND discount_pct >= 70
+            ORDER BY RANDOM()
+            LIMIT ?
+        """, (need,)).fetchall()
 
-    hot_rows_more = conn.execute(f"""
-      SELECT id, store, title, url, image_url, ends_at, created_at,
-             discount_pct, price_old, price_new, currency
-      FROM deals
-      WHERE kind='hot_deal'
-        AND discount_pct BETWEEN 70 AND 94
-        {"AND id NOT IN (" + ",".join(["?"]*len(picked_ids)) + ")" if picked_ids else ""}
-      ORDER BY RANDOM()
-      LIMIT ?
-    """, (*picked_ids, need) if picked_ids else (need,)).fetchall()
-
-    hot_rows += hot_rows_more
-
-# 4) Фоллбек: если всё равно мало — добиваем чем угодно >=70
-if len(hot_rows) < HOT_TOTAL:
-    need = HOT_TOTAL - len(hot_rows)
-    picked_ids = {r[0] for r in hot_rows}
-
-    hot_rows_more = conn.execute(f"""
-      SELECT id, store, title, url, image_url, ends_at, created_at,
-             discount_pct, price_old, price_new, currency
-      FROM deals
-      WHERE kind='hot_deal'
-        AND discount_pct >= 70
-        {"AND id NOT IN (" + ",".join(["?"]*len(picked_ids)) + ")" if picked_ids else ""}
-      ORDER BY RANDOM()
-      LIMIT ?
-    """, (*picked_ids, need) if picked_ids else (need,)).fetchall()
-
-    hot_rows += hot_rows_more
-
+    # убираем дубли по id и ограничиваем HOT_TOTAL
+    uniq = {}
+    for r in hot_rows:
+        uniq[r[0]] = r
+    hot_rows = list(uniq.values())[:HOT_TOTAL]
 
     free_games_rows = conn.execute("""
         SELECT store,title,url,image_url,note
@@ -2459,31 +2449,31 @@ if len(hot_rows) < HOT_TOTAL:
     # keep
     keep = []
     for r in keep_rows:
-      did, st, title, url, image_url, ends_at, created_at = r
+        did, st, title, url, image_url, ends_at, created_at = r
 
-      if not (allow_time(ends_at) and allow_store(st)):
-        continue
+        if not (allow_time(ends_at) and allow_store(st)):
+            continue
 
-    img_main, img_fb = images_for_row(st, url, image_url)
+        img_main, img_fb = images_for_row(st, url, image_url)
 
-    keep.append({
-        "id": did,
-        "store": (st or "").strip().lower(),
-        "store_badge": store_badge(st),
-        "title": title,
-        "url": url,  # оригинальная ссылка магазина (может пригодиться)
-        "image": img_main,
-        "image_fallback": img_fb,
-        "ends_at": ends_at,
-        "is_new": is_new(created_at),
-        "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
-        "created_at": created_at,
-        "expired": not is_active_end(ends_at),
-        "time_left": time_left_label(ends_at),
-        "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=keep",
-    })
+        keep.append({
+            "id": did,
+            "store": (st or "").strip().lower(),
+            "store_badge": store_badge(st),
+            "title": title,
+            "url": url,
+            "image": img_main,
+            "image_fallback": img_fb,
+            "ends_at": ends_at,
+            "is_new": is_new(created_at),
+            "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
+            "created_at": created_at,
+            "expired": not is_active_end(ends_at),
+            "time_left": time_left_label(ends_at),
+            "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=keep",
+        })
 
-# weekend
+    # weekend
     weekend = []
     for r in weekend_rows:
         did, st, title, url, image_url, ends_at, created_at = r
@@ -2494,23 +2484,23 @@ if len(hot_rows) < HOT_TOTAL:
         img_main, img_fb = images_for_row(st, url, image_url)
 
         weekend.append({
-        "id": did,
-        "store": (st or "").strip().lower(),
-        "store_badge": store_badge(st),
-        "title": title,
-        "url": url,
-        "image": img_main,
-        "image_fallback": img_fb,
-        "ends_at": ends_at,
-        "is_new": is_new(created_at),
-        "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
-        "created_at": created_at,
-        "expired": not is_active_end(ends_at),
-        "time_left": time_left_label(ends_at),
-        "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=weekend",
-    })
+            "id": did,
+            "store": (st or "").strip().lower(),
+            "store_badge": store_badge(st),
+            "title": title,
+            "url": url,
+            "image": img_main,
+            "image_fallback": img_fb,
+            "ends_at": ends_at,
+            "is_new": is_new(created_at),
+            "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
+            "created_at": created_at,
+            "expired": not is_active_end(ends_at),
+            "time_left": time_left_label(ends_at),
+            "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=weekend",
+        })
 
-# hot (по магазину фильтруем, по времени можно НЕ фильтровать)
+    # hot
     hot = []
     for r in hot_rows:
         did, st, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency = r
@@ -2538,13 +2528,11 @@ if len(hot_rows) < HOT_TOTAL:
             "price_old": price_old,
             "price_new": price_new,
             "currency": currency,
-            "price_text": price_line(price_old, price_new, currency),
             "price_old_fmt": fmt_price(price_old),
             "price_new_fmt": fmt_price(price_new),
             "currency_sym": currency_symbol(currency),
             "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
-    })
-
+        })
 
     keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
     weekend.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
@@ -2567,11 +2555,12 @@ if len(hot_rows) < HOT_TOTAL:
             "note": note,
         })
 
-# Подсчитываем статистику
-    # Подсчитываем статистику
     total_games = len(keep) + len(weekend) + len(hot)
     new_today = sum(1 for g in (keep + weekend + hot) if g.get("is_new"))
-    expiring_soon = sum(1 for g in (keep + weekend) if g.get("time_left") and "час" in g.get("time_left", ""))
+    expiring_soon = sum(
+        1 for g in (keep + weekend)
+        if g.get("time_left") and ("час" in g.get("time_left", "") or "мин" in g.get("time_left", ""))
+    )
     last_update = datetime.now().strftime("%d.%m.%Y %H:%M")
 
     return PAGE.render(
@@ -2589,7 +2578,7 @@ if len(hot_rows) < HOT_TOTAL:
         expiring_soon=expiring_soon,
         last_update=last_update,
         generate_placeholder=lambda t, s: "",
-)
+    )
 
 # --------------------
 # API endpoints
