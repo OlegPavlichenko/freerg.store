@@ -806,6 +806,10 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
     }
 
     r = requests.get(endpoint, params=params, timeout=25)
+    print("ITAD URL:", r.url)
+    print("ITAD STATUS:", r.status_code)
+    if r.status_code >= 400:
+      print("ITAD ERROR BODY:", (r.text or "")[:800])
     r.raise_for_status()
     data = r.json()
 
@@ -912,6 +916,7 @@ def fetch_itad_steam_hot_deals(
         return []
 
     endpoint = "https://api.isthereanydeal.com/deals/v2"
+    limit = min(limit, 200)
     params = {
         "key": ITAD_API_KEY,
         "shops": "61",          # Steam
@@ -920,15 +925,12 @@ def fetch_itad_steam_hot_deals(
     }
 
     r = requests.get(endpoint, params=params, timeout=25)
-    r = requests.get(endpoint, params=params, timeout=25)
 
     print("ITAD URL:", r.url)
     print("ITAD STATUS:", r.status_code)
 
     if r.status_code >= 400:
         print("ITAD ERROR BODY:", (r.text or "")[:800])
-
-
     r.raise_for_status()
     data = r.json()
 
