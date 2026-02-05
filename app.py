@@ -912,11 +912,12 @@ def fetch_itad_steam_hot_deals(
       - mix_90_plus штук со скидкой 90+
     Остальное добиваем чем есть.
     """
+    limit = min(int(limit), 200)     # ✅ ITAD max
+    keep = min(int(keep), limit)     # ✅ нельзя keep больше чем limit
     if not ITAD_API_KEY:
         return []
 
     endpoint = "https://api.isthereanydeal.com/deals/v2"
-    limit = min(limit, 200)
     params = {
         "key": ITAD_API_KEY,
         "shops": "61",          # Steam
@@ -1333,7 +1334,7 @@ async def job_async(store: str = "steam"):
             st = (store or "").strip().lower()
 
             if st == "steam":
-                deals = fetch_itad_steam() + fetch_itad_steam_hot_deals(70, keep=120)
+                deals = fetch_itad_steam() + fetch_itad_steam_hot_deals(min_cut=70, limit=200, keep=60)
                 new_items = save_deals(deals)
                 tg = await post_unposted_to_telegram(limit=POST_LIMIT, store="steam")
 
