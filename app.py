@@ -1273,6 +1273,12 @@ def tg_go_url(deal_id: str, utm_content: str) -> str:
     include_button = (random.random() < 0.4)  # 40% с кнопкой, 60% без
     return f"{SITE_BASE}/go/{deal_id}?src=tg&utm_campaign=freeredeemgames&utm_content={utm_content}"
 
+INCLUDE_BUTTON = True  # можно потом привязать к .env
+
+def include_button() -> bool:
+    return bool(INCLUDE_BUTTON)
+
+
 async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None = None):
     """
     Постим kind in ('free_to_keep', 'free_weekend').
