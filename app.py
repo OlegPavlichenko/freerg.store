@@ -1112,10 +1112,13 @@ def fetch_epic(locale=None, country=None):
             continue
 
         title = e.get("title") or "Epic freebie"
-        page_url = epic_product_url(e, locale)
-        if re.search(r"/p/[^/]+$", page_url):   # очень часто короткий slug заканчивается сразу
-          page_url = epic_canonicalize(page_url)
-          print("EPIC URL:", page_url)
+        cands = epic_url_candidates(e, locale)
+        page_url = epic_pick_working_url(cands)
+
+        if epic_is_dlc(e):
+          print("EPIC DLC:", title, "->", page_url)
+        else:
+          print("EPIC GAME:", title, "->", page_url)
 
         img = None
         for ki in (e.get("keyImages") or []):
@@ -1145,6 +1148,80 @@ def fetch_epic(locale=None, country=None):
         })
 
     return out
+
+def epic_is_dlc(e: dict) -> bool:
+    # часто type = "DLC" или "ADD_ON", но поля гуляют
+    t = str(e.get("offerType") or e.get("type") or "").upper()
+    if "DLC" in t or "ADD" in t or "ADDON" in t:
+        return True
+
+    # иногда есть categories
+    for c in (e.get("categories") or []):
+        path = str((c or {}).get("path") or "").lower()
+        if "dlc" in path or "addons" in path or "add-ons" in path or "add-ons" in path:
+            return True
+
+    return False
+
+def epic_offer_url(e: dict, locale: str) -> str | None:
+    # locale -> язык в url
+    loc = (locale or "en-US")
+    # часть epic иногда хочет ru-RU именно, но в URL обычно "ru" или "en-US"
+    # оставим en-US/ru как у тебя:
+    loc_short = loc.split("-")[0]  # ru / en
+
+    ns = e.get("namespace")
+    offer_id = e.get("id") or e.get("offerId")  # чаще id
+    if ns and offer_id:
+        # это очень часто работает и для DLC
+        return f"https://store.epicgames.com/{loc_short}/purchase?namespace={ns}&offers={offer_id}"
+    return None
+
+def epic_url_candidates(e: dict, locale: str) -> list[str]:
+    cands = []
+
+    # 0) DLC-first: offer url
+    offer = epic_offer_url(e, locale)
+    if offer:
+        cands.append(offer)
+
+    # 1) productHome pageSlug
+    loc_short = (locale or "en-US").split("-")[0]
+    for m in (e.get("offerMappings") or []):
+        if m.get("pageType") == "productHome" and m.get("pageSlug"):
+            slug = m["pageSlug"].strip("/")
+            cands.append(f"https://store.epicgames.com/{loc_short}/p/{slug}")
+            cands.append(f"https://store.epicgames.com/en-US/p/{slug}")  # fallback locale
+
+    # 2) fallback поля
+    for k in ("productPageSlug", "urlSlug", "productSlug"):
+        slug = (e.get(k) or "").strip().replace("/home", "").strip("/")
+        if slug:
+            cands.append(f"https://store.epicgames.com/{loc_short}/p/{slug}")
+            cands.append(f"https://store.epicgames.com/en-US/p/{slug}")
+
+    # 3) общий fallback
+    cands.append(f"https://store.epicgames.com/{loc_short}/free-games")
+    cands.append("https://store.epicgames.com/free-games")
+
+    # уникальные
+    uniq = []
+    for u in cands:
+        if u not in uniq:
+            uniq.append(u)
+    return uniq
+
+
+def epic_pick_working_url(cands: list[str]) -> str:
+    headers = {"User-Agent": "Mozilla/5.0"}
+    for u in cands:
+        try:
+            r = requests.get(u, timeout=12, allow_redirects=True, headers=headers)
+            if r.status_code == 200 and "not found" not in (r.text or "").lower():
+                return str(r.url)
+        except Exception:
+            pass
+    return cands[0] if cands else "https://store.epicgames.com/free-games"
 
 
 # --------------------
