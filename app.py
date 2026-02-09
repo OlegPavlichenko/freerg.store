@@ -5,7 +5,7 @@ import hashlib
 import asyncio
 import requests
 
-from datetime import datetime, timezone as dt_timezone, timedelta
+from datetime import datetime, timezones, timedelta
 from zoneinfo import ZoneInfo
 from apscheduler.triggers.cron import CronTrigger
 
@@ -30,7 +30,7 @@ DB_PATH = os.getenv("DB_PATH", "/opt/freerg/data/data.sqlite3")
 SITE_BASE = os.getenv("SITE_BASE", "https://freerg.store")
 
 # расписания (аккуратно)
-STEAM_MIN = int(os.getenv("STEAM_MIN", "180"))     # Steam/ITAD раз в 60 минут
+STEAM_MIN = int(os.getenv("STEAM_MIN", "60"))     # Steam/ITAD раз в 60 минут
 EPIC_MIN = int(os.getenv("EPIC_MIN", "720"))      # Epic раз в 12 часов
 GOG_MIN = int(os.getenv("GOG_MIN", "1440"))  # 24 часа
 PRIME_MIN = int(os.getenv("PRIME_MIN", "1440"))
@@ -193,14 +193,14 @@ def is_new(created_at: str | None, hours: int = 24) -> bool:
     dt = parse_iso_utc(created_at)
     if not dt:
         return False
-    return dt >= (datetime.now(dt_timezone.utc) - timedelta(hours=hours))
+    return dt >= (datetime.now(timezone.utc) - timedelta(hours=hours))
 
 
 def time_left_label(ends_at: str | None) -> str | None:
     dt = parse_iso_utc(ends_at)
     if not dt:
         return None
-    now = datetime.now(dt_timezone.utc)
+    now = datetime.now(timezone.utc)
     delta = dt - now
     if delta.total_seconds() <= 0:
         return "истекло"
@@ -219,21 +219,21 @@ def time_left_label(ends_at: str | None) -> str | None:
 def sort_key_by_ends(ends_at: str | None):
     dt = parse_iso_utc(ends_at)
     # None/битые — в конец
-    return dt if dt else datetime.max.replace(tzinfo=dt_timezone.utc)
+    return dt if dt else datetime.max.replace(tzinfo=timezone.utc)
 
 
 def is_active_end(ends_at: str | None) -> bool:
     dt = parse_iso_utc(ends_at)
     if not dt:
         return True  # если дедлайна нет — считаем актуальным
-    return dt > datetime.now(dt_timezone.utc)
+    return dt > datetime.now(timezone.utc)
 
 
 def is_expired_recent(ends_at: str | None, days: int = 7) -> bool:
     dt = parse_iso_utc(ends_at)
     if not dt:
         return False
-    now = datetime.now(dt_timezone.utc)
+    now = datetime.now(timezone.utc)
     return (dt <= now) and (dt >= now - timedelta(days=days))
 
 
@@ -243,7 +243,7 @@ def cleanup_expired(keep_days: int = 7) -> int:
     keep_days=7 => неделю храним, потом чистим.
     Возвращает количество удалённых.
     """
-    cutoff = datetime.now(dt_timezone.utc) - timedelta(days=keep_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=keep_days)
 
     conn = db()
     rows = conn.execute(
@@ -849,7 +849,9 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
         try:
             if "itad.link" in itad_url:
                 resp = requests.head(itad_url, timeout=5, allow_redirects=True)
-                steam_url = str(resp.url)
+                # 🔥 УСКОРЕНИЕ: не делаем редиректы в fetch
+                steam_url = itad_url  # используем как есть
+                app_id = extract_steam_app_id_fast(steam_url) or ""
                 print(f"  🔄 Редирект: {itad_url[:50]}... -> {steam_url[:60]}...")
         except Exception as e:
             print(f"  ⚠️  Не удалось получить конечный URL для {itad_url}: {e}")
@@ -1079,7 +1081,7 @@ def fetch_epic(locale=None, country=None):
     catalog = root.get("data", {}).get("Catalog", {})
     elements = catalog.get("searchStore", {}).get("elements", []) or []
 
-    now = datetime.now(dt_timezone.utc)
+    now = datetime.now(timezone.utc)
 
     def parse_iso(s):
         if not s:
@@ -1214,22 +1216,21 @@ def epic_url_candidates(e: dict, locale: str) -> list[str]:
 
 def epic_pick_working_url(cands: list[str]) -> str:
     headers = {"User-Agent": "Mozilla/5.0"}
-    for u in cands:
+    for u in cands[:3]:  # 🔥 ТОЛЬКО первые 3!
         try:
-            r = requests.get(u, timeout=12, allow_redirects=True, headers=headers)
-            if r.status_code == 200 and "not found" not in (r.text or "").lower():
+            r = requests.get(u, timeout=5, allow_redirects=True, headers=headers)  # 🔥 timeout=5
+            if r.status_code == 200:
                 return str(r.url)
         except Exception:
-            pass
+            continue
     return cands[0] if cands else "https://store.epicgames.com/free-games"
-
 
 # --------------------
 # SAVE + POST
 # --------------------
 def save_deals(deals: list[dict]):
     conn = db()
-    now = datetime.now(dt_timezone.utc).isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     new_items = 0
     for d in deals:
@@ -1362,7 +1363,7 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
             f"{tags}"
         )
 
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=site_url)]]) if include_button else None
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(button_text, url=site_url)]]) if include_button() else None
 
 
         # выбор картинки
