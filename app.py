@@ -5,7 +5,7 @@ import hashlib
 import asyncio
 import requests
 
-from datetime import datetime, timezones, timedelta
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from apscheduler.triggers.cron import CronTrigger
 
