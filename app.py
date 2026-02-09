@@ -845,17 +845,26 @@ def fetch_itad_steam(limit: int = 200, slow_limit: int = 20):
             continue
 
         # 🔥 ВАЖНО: Получаем конечный Steam URL вместо itad.link
-        steam_url = itad_url  # по умолчанию
+        steam_url = itad_url
+        app_id = None
+
         try:
             if "itad.link" in itad_url:
-                resp = requests.head(itad_url, timeout=5, allow_redirects=True)
-                # 🔥 УСКОРЕНИЕ: не делаем редиректы в fetch
-                steam_url = itad_url  # используем как есть
-                app_id = extract_steam_app_id_fast(steam_url) or ""
+                # Делаем GET запрос с редиректами
+                resp = requests.get(itad_url, timeout=8, allow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
+                steam_url = str(resp.url)
                 print(f"  🔄 Редирект: {itad_url[:50]}... -> {steam_url[:60]}...")
+        
+                # Извлекаем AppID
+                app_id = extract_steam_app_id_fast(steam_url)
         except Exception as e:
-            print(f"  ⚠️  Не удалось получить конечный URL для {itad_url}: {e}")
+            print(f"  ⚠️  Редирект ошибка: {e}")
+            # Пробуем извлечь из исходного URL
+            app_id = extract_steam_app_id_fast(itad_url)
 
+        if not app_id:
+            app_id = extract_steam_app_id_fast(steam_url) or ""
+        
         expiry = deal.get("expiry") or it.get("expiry")
         start = deal.get("start") or it.get("start")
 
@@ -1374,15 +1383,28 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
             photo = steam_header_image_from_url(url)
 
         try:
-            if photo:
-                await bot.send_photo(
-                    chat_id=TG_CHAT_ID,
-                    photo=photo,
-                    caption=text,
-                    parse_mode="Markdown",
-                    reply_markup=kb,
-                )
+            # 🔥 ФИКС: Проверяем что photo валидный URL
+            if photo and photo.startswith("http") and ("steamstatic.com" in photo or "epicgames.com" in photo):
+                try:
+                    await bot.send_photo(
+                        chat_id=TG_CHAT_ID,
+                        photo=photo,
+                        caption=text,
+                        parse_mode="Markdown",
+                        reply_markup=kb,
+                    )
+                except Exception as e:
+                    # Если фото не загрузилось - постим текстом
+                    print(f"Photo failed, posting as text: {e}")
+                    await bot.send_message(
+                        chat_id=TG_CHAT_ID,
+                        text=text,
+                        parse_mode="Markdown",
+                        reply_markup=kb,
+                        disable_web_page_preview=False,
+                    )
             else:
+                # Без фото
                 await bot.send_message(
                     chat_id=TG_CHAT_ID,
                     text=text,
