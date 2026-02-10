@@ -1140,11 +1140,23 @@ def fetch_epic(locale=None, country=None):
         start = active.get("startDate")
         end = active.get("endDate")
 
-        # определяем free_to_keep: чаще всего discountPrice==0
+        # 🔥 ИСПРАВЛЕНИЕ: правильная логика для Epic
         price = (((e.get("price") or {}).get("totalPrice")) or {})
-        discount_price = price.get("discountPrice")
+        discount_price = price.get("discountPrice", 0)
+        original_price = price.get("originalPrice", 0)
+        discount_pct = price.get("discountPercentage", 0)
 
-        kind = "free_to_keep"
+        # Определяем тип:
+        # - Если цена 0 И была > 0 → бесплатная раздача
+        # - Если цена > 0 И скидка 70%+ → hot_deal
+        # - Остальное пропускаем
+
+        if discount_price == 0 and original_price > 0:
+            kind = "free_to_keep"
+        elif discount_price > 0 and original_price > 0 and discount_pct >= 70:
+            kind = "hot_deal"
+        else:
+            continue  # пропускаем
 
         out.append({
             "store": "epic",
@@ -1156,6 +1168,12 @@ def fetch_epic(locale=None, country=None):
             "source": "epic",
             "starts_at": start,
             "ends_at": end,
+            
+            # 🔥 ДОБАВИТЬ ДЛЯ HOT_DEAL:
+            "discount_pct": int(discount_pct) if kind == "hot_deal" else None,
+            "price_old": original_price if kind == "hot_deal" else None,
+            "price_new": discount_price if kind == "hot_deal" else None,
+            "currency": price.get("currencyCode") if kind == "hot_deal" else None,
         })
 
     return out
