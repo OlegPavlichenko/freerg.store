@@ -228,9 +228,9 @@ def ensure_columns() -> None:
         if "user_agent" not in cols:
             add_col("ALTER TABLE lfg ADD COLUMN user_agent TEXT;")
 
-        # Теперь можно безопасно создать индексы (колонки уже точно существуют)
+        # после того как гарантировано есть active и expires_at:
         try:
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_created ON lfg(created_at);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active_expires ON lfg(active, expires_at);")
         except Exception:
             pass
 
