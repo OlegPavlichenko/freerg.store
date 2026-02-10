@@ -51,6 +51,45 @@ scheduler = AsyncIOScheduler()
 _scheduler_started = False
 JOB_LOCK = asyncio.Lock()
 
+#--------------------------------------
+# TG (forum conf)
+#--------------------------------------
+
+import secrets
+
+# 1) Сюда вставишь свои ссылки на темы (из Telegram)
+TG_TOPICS = {
+    "general": "https://t.me/freergstore/1",
+    "hot": "https://t.me/freergstore/6",
+    "cs2": "https://t.me/freergstore/8",
+    "bf6": "https://t.me/freergstore/16",
+    "dota2": "https://t.me/freergstore/10",
+    "fortnite": "https://t.me/freergstore/12",
+    "gta": "https://t.me/freergstore/14",
+    "other": "https://t.me/freergstore/21",
+}
+
+ALLOWED_GAMES = {"general", "hot", "cs2", "bf6", "dota2", "fortnite", "gta", "other"}
+ALLOWED_PLATFORMS = {"pc", "ps", "xbox", "mobile", "other"}
+ALLOWED_REGIONS = {"eu", "us", "asia", "other"}
+
+def now_iso() -> str:
+    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+def make_id() -> str:
+    # короткий id, но достаточно случайный
+    return secrets.token_hex(8)
+
+def normalize_choice(v: str | None, allowed: set[str], default: str) -> str:
+    v = (v or "").strip().lower()
+    return v if v in allowed else default
+
+def clamp_text(s: str | None, max_len: int) -> str:
+    s = (s or "").strip()
+    if len(s) > max_len:
+        s = s[:max_len].rstrip() + "…"
+    return s
+
 # --------------------
 # DB helpers
 # --------------------
@@ -272,11 +311,21 @@ def cleanup_expired(keep_days: int = 7) -> int:
     conn.close()
     return len(to_delete)
 
-def log_click(conn: sqlite3.Connection, deal_id: str, request: Request, src: str | None = None, utm_campaign: str | None = None, utm_content: str | None = None):
+def log_click(
+    conn: sqlite3.Connection,
+    deal_id: str,
+    request: Request,
+    src: str | None = None,
+    utm_campaign: str | None = None,
+    utm_content: str | None = None,
+):
     try:
-        ip = request.client.host if request.client else None
-        ua = request.headers.get("user-agent")
-        ref = request.headers.get("referer")
+        # если стоит nginx/proxy — IP будет в X-Forwarded-For
+        xff = request.headers.get("x-forwarded-for", "")
+        ip = (xff.split(",")[0].strip() if xff else "") or (request.client.host if request.client else None)
+
+        ua = (request.headers.get("user-agent") or "")[:400]
+        ref = (request.headers.get("referer") or "")[:500]
 
         conn.execute("""
             INSERT INTO clicks (created_at, deal_id, src, utm_campaign, utm_content, ip, user_agent, referer)
@@ -284,9 +333,9 @@ def log_click(conn: sqlite3.Connection, deal_id: str, request: Request, src: str
         """, (
             datetime.utcnow().isoformat(),
             deal_id,
-            src,
-            utm_campaign,
-            utm_content,
+            (src or "")[:50],
+            (utm_campaign or "")[:80],
+            (utm_content or "")[:80],
             ip,
             ua,
             ref
@@ -2725,6 +2774,203 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         last_update=last_update,
         generate_placeholder=lambda t, s: "",
     )
+
+from fastapi import Form, Request
+
+@app.get("/lfg", response_class=HTMLResponse)
+def lfg(request: Request, game: str = "general"):
+    game = normalize_choice(game, ALLOWED_GAMES, "general")
+
+    conn = db()
+    rows = conn.execute("""
+        SELECT id, created_at, game, title, note, region, platform, when_text, tg_topic_url
+        FROM lfg_posts
+        WHERE active=1 AND game=?
+        ORDER BY created_at DESC
+        LIMIT 80
+    """, (game,)).fetchall()
+    conn.close()
+
+    posts = []
+    for r in rows:
+        pid, created_at, g, title, note, region, platform, when_text, tg_topic_url = r
+        posts.append({
+            "id": pid,
+            "created_at": created_at,
+            "game": g,
+            "title": title,
+            "note": note,
+            "region": region or "",
+            "platform": platform or "",
+            "when_text": when_text or "",
+            "tg_topic_url": tg_topic_url,
+            # ведём в телегу через трекинг
+            "go_url": f"{SITE_BASE}/go/lfg/{pid}?to=tg&src=site&utm_campaign=lfg&utm_content=card",
+        })
+
+    # МИНИ-HTML прямо тут (чтобы не трогать шаблон пока)
+    # Потом красиво интегрируем в твой PAGE.render
+    html = f"""
+    <html><head><meta charset="utf-8"><title>LFG</title></head>
+    <body style="font-family:system-ui;max-width:900px;margin:20px auto;padding:0 12px;">
+      <h1>🎮 LFG — {game.upper()}</h1>
+
+      <p>
+        <a href="/lfg/new?game={game}">➕ Создать объявление</a> |
+        <a href="/">← На главную</a>
+      </p>
+
+      <p>Фильтр:
+        <a href="/lfg?game=general">general</a> ·
+        <a href="/lfg?game=hot">hot</a> ·
+        <a href="/lfg?game=bf6">battlefield6</a> ·
+        <a href="/lfg?game=cs2">cs2</a> ·
+        <a href="/lfg?game=dota2">dota2</a> ·
+        <a href="/lfg?game=fortnite">fortnite</a> ·
+        <a href="/lfg?game=gta">gta</a> ·
+        <a href="/lfg?game=other">other</a>
+      </p>
+
+      <hr>
+    """
+
+    if not posts:
+        html += "<p>Пока пусто. Создай первое объявление 👇</p>"
+    else:
+        for p in posts:
+            html += f"""
+            <div style="border:1px solid #ddd;border-radius:12px;padding:12px;margin:12px 0;">
+              <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;">
+                <b>{p['title']}</b>
+                <span style="opacity:.7;font-size:12px">{p['created_at']}</span>
+              </div>
+              <div style="margin-top:6px;white-space:pre-wrap">{p['note']}</div>
+              <div style="margin-top:8px;opacity:.85;font-size:13px">
+                {("🕒 " + p['when_text']) if p['when_text'] else ""}
+                {(" · 🌍 " + p['region']) if p['region'] else ""}
+                {(" · 🎮 " + p['platform']) if p['platform'] else ""}
+              </div>
+              <div style="margin-top:10px;">
+                <a href="{p['go_url']}" style="display:inline-block;padding:8px 12px;border-radius:10px;border:1px solid #333;text-decoration:none;">
+                  💬 В чат →
+                </a>
+              </div>
+            </div>
+            """
+
+    html += "</body></html>"
+    return HTMLResponse(html)
+
+
+@app.get("/lfg/new", response_class=HTMLResponse)
+def lfg_new(game: str = "general"):
+    game = normalize_choice(game, ALLOWED_GAMES, "general")
+    html = f"""
+    <html><head><meta charset="utf-8"><title>New LFG</title></head>
+    <body style="font-family:system-ui;max-width:700px;margin:20px auto;padding:0 12px;">
+      <h1>➕ Новое LFG — {game.upper()}</h1>
+      <form method="post" action="/lfg/create">
+        <input type="hidden" name="game" value="{game}">
+        <p>Заголовок (коротко):<br>
+          <input name="title" maxlength="80" style="width:100%;padding:10px;border-radius:10px;border:1px solid #ccc">
+        </p>
+        <p>Описание (что ищешь):<br>
+          <textarea name="note" maxlength="800" rows="6" style="width:100%;padding:10px;border-radius:10px;border:1px solid #ccc"></textarea>
+        </p>
+        <p>Когда (например: “сейчас”, “в 22:00”, “завтра”):<br>
+          <input name="when_text" maxlength="60" style="width:100%;padding:10px;border-radius:10px;border:1px solid #ccc">
+        </p>
+        <p>Платформа:
+          <select name="platform">
+            <option value="pc">PC</option>
+            <option value="ps">PlayStation</option>
+            <option value="xbox">Xbox</option>
+            <option value="mobile">Mobile</option>
+            <option value="other">Other</option>
+          </select>
+        </p>
+        <p>Регион:
+          <select name="region">
+            <option value="eu">EU</option>
+            <option value="us">US</option>
+            <option value="asia">Asia</option>
+            <option value="other">Other</option>
+          </select>
+        </p>
+        <button type="submit" style="padding:10px 14px;border-radius:10px;border:1px solid #333;background:#fff;cursor:pointer">
+          Создать ✅
+        </button>
+        <a href="/lfg?game={game}" style="margin-left:10px;">Отмена</a>
+      </form>
+    </body></html>
+    """
+    return HTMLResponse(html)
+
+
+@app.post("/lfg/create")
+def lfg_create(
+    game: str = Form("general"),
+    title: str = Form(""),
+    note: str = Form(""),
+    when_text: str = Form(""),
+    region: str = Form("eu"),
+    platform: str = Form("pc"),
+):
+    game = normalize_choice(game, ALLOWED_GAMES, "general")
+    region = normalize_choice(region, ALLOWED_REGIONS, "ue")
+    platform = normalize_choice(platform, ALLOWED_PLATFORMS, "pc")
+
+    title = clamp_text(title, 80)
+    note = clamp_text(note, 800)
+    when_text = clamp_text(when_text, 60)
+
+    if not title or not note:
+        # простая защита от пустых
+        return RedirectResponse(url=f"/lfg/new?game={game}", status_code=302)
+
+    pid = make_id()
+    created_at = now_iso()
+    expires_at = (datetime.utcnow() + timedelta(hours=24)).replace(microsecond=0).isoformat() + "Z"
+
+    tg_topic_url = TG_TOPICS.get(game) or TG_TOPICS["general"]
+
+    conn = db()
+    conn.execute("""
+        INSERT INTO lfg_posts(id, created_at, game, title, note, region, platform, when_text, tg_topic_url, expires_at, active)
+        VALUES(?,?,?,?,?,?,?,?,?,?,1)
+    """, (pid, created_at, game, title, note, region, platform, when_text, tg_topic_url, expires_at))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url=f"/lfg?game={game}", status_code=302)
+
+@app.get("/go/lfg/{pid}")
+def go_lfg(
+    pid: str,
+    request: Request,
+    src: str = "site",
+    utm_campaign: str = "lfg",
+    utm_content: str = "card",
+):
+    conn = db()
+    row = conn.execute("""
+        SELECT tg_topic_url
+        FROM lfg_posts
+        WHERE id=? AND active=1
+        LIMIT 1
+    """, (pid,)).fetchone()
+
+    if not row:
+        conn.close()
+        return RedirectResponse(url=f"{SITE_BASE}/lfg", status_code=302)
+
+    tg_url = row[0]
+
+    # один общий логгер на всё:
+    log_click(conn, deal_id=f"lfg:{pid}", request=request, src=src, utm_campaign=utm_campaign, utm_content=utm_content)
+
+    conn.close()
+    return RedirectResponse(url=tg_url, status_code=302)
 
 # --------------------
 # API endpoints
