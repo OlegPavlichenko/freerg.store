@@ -94,7 +94,9 @@ def clamp_text(s: str | None, max_len: int) -> str:
 # DB helpers
 # --------------------
 def db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    ensure_tables(conn)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA temp_store=MEMORY;")
@@ -147,22 +149,24 @@ def db():
 
     return conn
 
-def ensure_tables(conn: sqlite3.Connection):
+def ensure_tables(conn: sqlite3.Connection) -> None:
     conn.execute("""
     CREATE TABLE IF NOT EXISTS lfg (
         id TEXT PRIMARY KEY,
         created_at TEXT,
         game TEXT,
-        platform TEXT,
         region TEXT,
+        platform TEXT,
         note TEXT,
-        tg TEXT,
-        ip TEXT,
-        user_agent TEXT
-    )
+        tg_user TEXT,
+        expires_at TEXT,
+        active INTEGER DEFAULT 1
+    );
     """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_created ON lfg(created_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_created ON lfg(created_at);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active ON lfg(active, expires_at);")
     conn.commit()
+
 
 def ensure_columns():
     """
@@ -2232,6 +2236,46 @@ PAGE = Template("""
             </div>
         </div>
         {% endif %}
+                
+
+        <div class="section">
+  <div class="section-header">
+    <span class="section-icon">🎮</span>
+    <h2 class="section-title">Ищу напарников</h2>
+    <span class="section-count">{{ lfg|length }}</span>
+  </div>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+    <button class="btn" onclick="openLfgModal()">Создать заявку →</button>
+    {% if tg_group_url %}
+      <a class="btn" href="{{ tg_group_url }}" target="_blank">Перейти в Telegram группу</a>
+    {% endif %}
+  </div>
+
+  {% if lfg|length == 0 %}
+    <div class="muted" style="opacity:.85;">Пока нет заявок. Создай первую 🙂</div>
+  {% else %}
+    <div class="games-grid">
+      {% for p in lfg %}
+      <div class="game-card">
+        <div class="game-content">
+          <h3 class="game-title">{{ p.game }}</h3>
+          <div class="game-meta" style="flex-wrap:wrap;">
+            {% if p.region %}<span class="meta-tag">🌍 {{ p.region }}</span>{% endif %}
+            {% if p.platform %}<span class="meta-tag">🕹 {{ p.platform }}</span>{% endif %}
+          </div>
+          {% if p.note %}
+            <div style="opacity:.9; margin:8px 0;">{{ p.note }}</div>
+          {% endif %}
+          <a class="btn" href="{{ p.tg_url }}" target="_blank">💬 Написать в TG</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+                
+
         {% if kind in ["all", "deals"] and hot|length > 0 %}
 <div class="section">
   <div class="section-header">
@@ -2311,32 +2355,62 @@ PAGE = Template("""
                 <h2 class="section-title">Бесплатные игры</h2>
                 <span class="section-count">{{ free_games|length }}</span>
             </div>
-            <div class="lfg-box">
-  <input id="lfg-game" placeholder="Игра (CS2, GTA, Dota)">
-  <button onclick="sendLFG()">Найти тиммейтов</button>
-  <div id="lfg-status"></div>
+                
+<div id="lfgModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); padding:16px; z-index:9999;">
+  <div style="max-width:520px; margin:40px auto; background:#111; border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <div style="font-size:18px; font-weight:700;">Создать заявку</div>
+      <button class="btn" onclick="closeLfgModal()">✕</button>
+    </div>
+
+    <div style="display:grid; gap:10px;">
+      <input id="lfg_game" placeholder="Игра (например: CS2)" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;">
+      <input id="lfg_region" placeholder="Регион (EU/RU/NA)" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;">
+      <input id="lfg_platform" placeholder="Платформа (PC/PS/Xbox/Mobile)" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;">
+      <input id="lfg_tg" placeholder="Твой Telegram @username (необязательно)" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;">
+      <textarea id="lfg_note" placeholder="Комментарий (необязательно)" rows="3" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;"></textarea>
+      <button class="btn" onclick="submitLfg()">Опубликовать →</button>
+      <div id="lfg_msg" style="opacity:.9;"></div>
+    </div>
+  </div>
 </div>
 
-
 <script>
-async function sendLFG() {
-  const game = document.getElementById("lfg-game").value;
+function openLfgModal(){ document.getElementById('lfgModal').style.display='block'; }
+function closeLfgModal(){ document.getElementById('lfgModal').style.display='none'; }
 
-  const res = await fetch("/lfg/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      game: game,
-      platform: "PC",
-      region: "EU"
-    })
-  });
+async function submitLfg(){
+  const payload = {
+    game: document.getElementById('lfg_game').value,
+    region: document.getElementById('lfg_region').value,
+    platform: document.getElementById('lfg_platform').value,
+    tg_user: document.getElementById('lfg_tg').value,
+    note: document.getElementById('lfg_note').value
+  };
+  const msg = document.getElementById('lfg_msg');
+  msg.textContent = 'Публикую...';
 
-  const data = await res.json();
-  document.getElementById("lfg-status").innerText =
-    data.ok ? "✅ Заявка создана!" : "❌ Ошибка";
+  try{
+    const r = await fetch('/api/lfg/create', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json();
+    if(j.ok){
+      msg.textContent = '✅ Заявка создана! Обновляю страницу...';
+      setTimeout(()=>location.reload(), 700);
+    } else {
+      msg.textContent = '⚠️ Не получилось: ' + (j.error || 'unknown');
+    }
+  }catch(e){
+    msg.textContent = '⚠️ Ошибка сети/сервера';
+  }
 }
 </script>
+                
+
+
             <div class="games-grid">
                 {% for game in free_games %}
                 <div class="game-card">
@@ -2768,6 +2842,28 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             "currency_sym": currency_symbol(currency),
             "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
         })
+    
+    lfg_rows = conn.execute("""
+        SELECT id, created_at, game, region, platform, note, tg_user, expires_at
+        FROM lfg
+        WHERE active=1
+          AND (expires_at IS NULL OR expires_at > ?)
+        ORDER BY created_at DESC
+        LIMIT 12
+    """, (datetime.utcnow().isoformat(),)).fetchall()
+
+    lfg = []
+    for r in lfg_rows:
+        lfg.append({
+            "id": r["id"],
+            "created_at": r["created_at"],
+            "game": r["game"],
+            "region": r["region"],
+            "platform": r["platform"],
+            "note": r["note"],
+            "tg_user": r["tg_user"],
+            "tg_url": f"{SITE_BASE}/tg/lfg/{r['id']}",
+        })
 
     keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
     weekend.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
@@ -2813,6 +2909,8 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         expiring_soon=expiring_soon,
         last_update=last_update,
         generate_placeholder=lambda t, s: "",
+        lfg=lfg,
+        tg_group_url=TG_GROUP_URL,
     )
 
 from fastapi import Form, Request
@@ -2947,15 +3045,61 @@ def lfg_new(game: str = "general"):
     return HTMLResponse(html)
 
 from pydantic import BaseModel
-import uuid
-from datetime import datetime
+import secrets
 
-class LFGCreate(BaseModel):
+class LfgCreateIn(BaseModel):
     game: str
-    platform: str | None = "PC"
     region: str | None = ""
+    platform: str | None = ""
     note: str | None = ""
-    tg: str | None = ""
+    tg_user: str | None = ""     # @username или username
+
+@app.post("/api/lfg/create")
+def lfg_create_api(payload: LfgCreateIn, request: Request):
+    conn = db()
+
+    game = (payload.game or "").strip()
+    if not game:
+        return {"ok": False, "error": "game_required"}
+
+    region = (payload.region or "").strip()
+    platform = (payload.platform or "").strip()
+    note = (payload.note or "").strip()
+    tg_user = (payload.tg_user or "").strip()
+
+    # нормализуем @username
+    if tg_user.startswith("@"):
+        tg_user = tg_user[1:]
+
+    now = datetime.utcnow()
+    expires = now + timedelta(hours=24)  # заявки живут 24 часа
+
+    lfg_id = secrets.token_hex(8)
+
+    conn.execute("""
+        INSERT INTO lfg (id, created_at, game, region, platform, note, tg_user, expires_at, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+    """, (
+        lfg_id,
+        now.isoformat(),
+        game[:80],
+        region[:40],
+        platform[:40],
+        note[:280],
+        tg_user[:64],
+        expires.isoformat(),
+    ))
+    conn.commit()
+
+    # (опционально) логируем как "квази-deal"
+    try:
+        log_click(conn, f"lfg:{lfg_id}", request, src="site", utm_campaign="freeredeemgames", utm_content="lfg_created")
+    except Exception:
+        pass
+
+    conn.close()
+    return {"ok": True, "id": lfg_id}
+
 
 @app.post("/lfg/create")
 def lfg_create(payload: LFGCreate, request: Request):
@@ -2984,6 +3128,37 @@ def lfg_create(payload: LFGCreate, request: Request):
     conn.close()
 
     return {"ok": True, "id": lfg_id}
+
+TG_GROUP_URL = os.getenv("TG_GROUP_URL", "").strip()  # добавим в .env
+
+@app.get("/tg/lfg/{lfg_id}")
+def tg_lfg_redirect(lfg_id: str, request: Request):
+    conn = db()
+    row = conn.execute("""
+        SELECT id, tg_user, active, expires_at
+        FROM lfg WHERE id=?
+    """, (lfg_id,)).fetchone()
+
+    # fallback: если заявки нет
+    target = TG_GROUP_URL or "https://t.me/"
+
+    if row:
+        # если есть username — ведём в ЛС, иначе в группу
+        tg_user = (row["tg_user"] or "").strip()
+        if tg_user:
+            target = f"https://t.me/{tg_user}"
+        else:
+            target = TG_GROUP_URL or target
+
+        # лог клика
+        try:
+            log_click(conn, f"lfg:{lfg_id}", request, src="site", utm_campaign="freeredeemgames", utm_content="lfg_tg_click")
+        except Exception:
+            pass
+
+    conn.close()
+    return RedirectResponse(target, status_code=302)
+
 
 @app.get("/lfg/list")
 def lfg_list(limit: int = 50):
