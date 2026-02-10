@@ -3102,7 +3102,7 @@ def lfg_create_api(payload: LfgCreateIn, request: Request):
 
 
 @app.post("/lfg/create")
-def lfg_create(payload: LFGCreate, request: Request):
+def lfg_create(payload: LfgCreate, request: Request):
     conn = db()
     ensure_tables(conn)
 
