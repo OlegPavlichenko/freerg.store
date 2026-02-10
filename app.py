@@ -58,12 +58,20 @@ JOB_LOCK = asyncio.Lock()
 def db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    ensure_tables(conn)
+
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA temp_store=MEMORY;")
     conn.execute("PRAGMA busy_timeout=5000;")
 
+    # 1) базовые таблицы
+    ensure_tables(conn)
+
+    # 2) миграции/индексы lfg (ВАЖНО: до старта приложения)
+    ensure_lfg_columns(conn)
+    ensure_lfg_indexes(conn)
+
+    # 3) твои остальные таблицы
     conn.execute("""
       CREATE TABLE IF NOT EXISTS deals (
         id TEXT PRIMARY KEY,
@@ -78,8 +86,7 @@ def db():
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_posted ON deals(posted)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_created ON deals(created_at)")
-    
-    # ✅ добавь это:
+
     conn.execute("""
       CREATE TABLE IF NOT EXISTS free_games (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,7 +116,9 @@ def db():
     conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_deal_id ON clicks(deal_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_created ON clicks(created_at)")
 
+    conn.commit()
     return conn
+
 
 def ensure_tables(conn: sqlite3.Connection) -> None:
     conn.execute("""
@@ -123,17 +132,15 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
         tg_username TEXT
       );
     """)
-    # ❗️Тут НЕ создаём idx_lfg_active_expires и вообще индексы на новые поля.
     conn.commit()
 
-
-def ensure_columns() -> None:
-    conn = db()
-    try:
-        ensure_lfg_columns(conn)
-        ensure_lfg_indexes(conn)
-    finally:
-        conn.close()
+#def ensure_columns() -> None:
+#    conn = db()
+#    try:
+#        ensure_lfg_columns(conn)
+#        ensure_lfg_indexes(conn)
+#    finally:
+#        conn.close()
 
 import sqlite3
 
@@ -145,11 +152,9 @@ def table_exists(conn: sqlite3.Connection, name: str) -> bool:
     return row is not None
 
 def has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
-    try:
-        rows = conn.execute(f"PRAGMA table_info({table});").fetchall()
-        return any(r[1] == col for r in rows)  # r[1] = column name
-    except Exception:
-        return False
+    rows = conn.execute(f"PRAGMA table_info({table});").fetchall()
+    # rows: (cid, name, type, notnull, dflt_value, pk)
+    return any(r[1] == col for r in rows)
 
 def add_column_if_missing(conn: sqlite3.Connection, table: str, col: str, ddl_type: str) -> None:
     if not has_column(conn, table, col):
@@ -158,8 +163,6 @@ def add_column_if_missing(conn: sqlite3.Connection, table: str, col: str, ddl_ty
 def ensure_lfg_columns(conn: sqlite3.Connection) -> None:
     if not table_exists(conn, "lfg"):
         return
-
-    # добавляем новые поля “безопасно”
     add_column_if_missing(conn, "lfg", "active", "INTEGER DEFAULT 1")
     add_column_if_missing(conn, "lfg", "expires_at", "TEXT")
     add_column_if_missing(conn, "lfg", "tg_chat_url", "TEXT")
@@ -169,7 +172,7 @@ def ensure_lfg_indexes(conn: sqlite3.Connection) -> None:
     if not table_exists(conn, "lfg"):
         return
 
-    # создаём индекс только если нужные колонки реально есть
+    # индекс создаём только если колонки реально есть
     if has_column(conn, "lfg", "expires_at"):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_expires ON lfg(expires_at);")
 
@@ -177,7 +180,6 @@ def ensure_lfg_indexes(conn: sqlite3.Connection) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active_expires ON lfg(active, expires_at);")
 
     conn.commit()
-
 
 def backfill_defaults():
     """
@@ -3558,7 +3560,7 @@ async def on_startup():
     global _scheduler_started
 
     # 1) миграция БД
-    ensure_columns()
+    #ensure_columns()
     backfill_defaults()
 
     # 2) startup в проде может вызываться повторно (и при reload тоже)
