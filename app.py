@@ -147,7 +147,22 @@ def db():
 
     return conn
 
-
+def ensure_tables(conn: sqlite3.Connection):
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS lfg (
+        id TEXT PRIMARY KEY,
+        created_at TEXT,
+        game TEXT,
+        platform TEXT,
+        region TEXT,
+        note TEXT,
+        tg TEXT,
+        ip TEXT,
+        user_agent TEXT
+    )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_created ON lfg(created_at)")
+    conn.commit()
 
 def ensure_columns():
     """
@@ -2302,6 +2317,7 @@ PAGE = Template("""
   <div id="lfg-status"></div>
 </div>
 
+
 <script>
 async function sendLFG() {
   const game = document.getElementById("lfg-game").value;
@@ -2931,39 +2947,69 @@ def lfg_new(game: str = "general"):
     return HTMLResponse(html)
 
 from pydantic import BaseModel
-from fastapi import Request, HTTPException
+import uuid
+from datetime import datetime
 
-class LfgCreateIn(BaseModel):
+class LFGCreate(BaseModel):
     game: str
-    platform: str = "PC"
-    region: str = "EU"
+    platform: str | None = "PC"
+    region: str | None = ""
+    note: str | None = ""
+    tg: str | None = ""
 
 @app.post("/lfg/create")
-async def lfg_create(request: Request):
-    # 1) пробуем JSON
-    try:
-        data = await request.json()
-        payload = LfgCreateIn(**data)
-        source = "json"
-    except Exception:
-        # 2) пробуем form, но только если multipart установлен
-        try:
-            form = await request.form()  # <-- требует python-multipart
-            payload = LfgCreateIn(
-                game=str(form.get("game") or ""),
-                platform=str(form.get("platform") or "PC"),
-                region=str(form.get("region") or "EU"),
-            )
-            source = "form"
-        except Exception:
-            raise HTTPException(
-                status_code=400,
-                detail="Send JSON or install python-multipart for HTML form support",
-            )
+def lfg_create(payload: LFGCreate, request: Request):
+    conn = db()
+    ensure_tables(conn)
 
-    # тут твоя логика создания заявки:
-    # payload.game / payload.platform / payload.region
-    return {"ok": True, "source": source, "data": payload.model_dump()}
+    lfg_id = uuid.uuid4().hex[:12]
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    conn.execute("""
+        INSERT INTO lfg (id, created_at, game, platform, region, note, tg, ip, user_agent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        lfg_id,
+        datetime.utcnow().isoformat(),
+        (payload.game or "").strip(),
+        (payload.platform or "PC").strip(),
+        (payload.region or "").strip(),
+        (payload.note or "").strip(),
+        (payload.tg or "").strip(),
+        ip,
+        ua
+    ))
+    conn.commit()
+    conn.close()
+
+    return {"ok": True, "id": lfg_id}
+
+@app.get("/lfg/list")
+def lfg_list(limit: int = 50):
+    conn = db()
+    rows = conn.execute("""
+        SELECT id, created_at, game, platform, region, note, tg
+        FROM lfg
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (limit,)).fetchall()
+    conn.close()
+
+    return {
+        "items": [
+            {
+                "id": r[0],
+                "created_at": r[1],
+                "game": r[2],
+                "platform": r[3],
+                "region": r[4],
+                "note": r[5],
+                "tg": r[6],
+            } for r in rows
+        ]
+    }
+
 
 @app.get("/go/lfg/{pid}")
 def go_lfg(
