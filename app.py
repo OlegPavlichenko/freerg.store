@@ -150,98 +150,71 @@ def db():
     return conn
 
 def ensure_tables(conn: sqlite3.Connection) -> None:
-    # ... твои существующие CREATE TABLE deals/free_games/clicks ...
-
-    # --- LFG table ---
     conn.execute("""
-    CREATE TABLE IF NOT EXISTS lfg (
-        id TEXT PRIMARY KEY,
+      CREATE TABLE IF NOT EXISTS lfg (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         created_at TEXT,
-        updated_at TEXT,
-        title TEXT,
         game TEXT,
         platform TEXT,
-        region TEXT,
-        lang TEXT,
+        mode TEXT,
         note TEXT,
-        tg_url TEXT,
-        expires_at TEXT,
-        active INTEGER DEFAULT 1,
-        ip TEXT,
-        user_agent TEXT
-    );
+        tg_username TEXT
+      );
     """)
-
-    # индексы — только после того, как таблица точно есть
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_created ON lfg(created_at);")
+    # ❗️Тут НЕ создаём idx_lfg_active_expires и вообще индексы на новые поля.
+    conn.commit()
 
 
 def ensure_columns() -> None:
     conn = db()
     try:
-        # Проверяем, есть ли таблица lfg вообще
-        row = conn.execute("""
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name='lfg'
-        """).fetchone()
-
-        if not row:
-            # если таблицы нет — ensure_tables её создаст
-            ensure_tables(conn)
-            conn.commit()
-            return
-
-        # Список текущих колонок
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(lfg);").fetchall()}
-
-        def add_col(sql: str) -> None:
-            try:
-                conn.execute(sql)
-            except Exception:
-                pass
-
-        # Добавляем недостающие колонки (миграция)
-        if "created_at" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN created_at TEXT;")
-        if "updated_at" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN updated_at TEXT;")
-        if "title" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN title TEXT;")
-        if "game" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN game TEXT;")
-        if "platform" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN platform TEXT;")
-        if "region" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN region TEXT;")
-        if "lang" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN lang TEXT;")
-        if "note" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN note TEXT;")
-        if "tg_url" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN tg_url TEXT;")
-        if "expires_at" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN expires_at TEXT;")
-        if "active" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN active INTEGER DEFAULT 1;")
-        if "ip" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN ip TEXT;")
-        if "user_agent" not in cols:
-            add_col("ALTER TABLE lfg ADD COLUMN user_agent TEXT;")
-
-        # после того как гарантировано есть active и expires_at:
-        try:
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active_expires ON lfg(active, expires_at);")
-        except Exception:
-            pass
-
-        try:
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active_expires ON lfg(active, expires_at);")
-        except Exception:
-            pass
-
-        conn.commit()
+        ensure_lfg_columns(conn)
+        ensure_lfg_indexes(conn)
     finally:
         conn.close()
+
+import sqlite3
+
+def table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1;",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+def has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
+    try:
+        rows = conn.execute(f"PRAGMA table_info({table});").fetchall()
+        return any(r[1] == col for r in rows)  # r[1] = column name
+    except Exception:
+        return False
+
+def add_column_if_missing(conn: sqlite3.Connection, table: str, col: str, ddl_type: str) -> None:
+    if not has_column(conn, table, col):
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl_type};")
+
+def ensure_lfg_columns(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "lfg"):
+        return
+
+    # добавляем новые поля “безопасно”
+    add_column_if_missing(conn, "lfg", "active", "INTEGER DEFAULT 1")
+    add_column_if_missing(conn, "lfg", "expires_at", "TEXT")
+    add_column_if_missing(conn, "lfg", "tg_chat_url", "TEXT")
+    conn.commit()
+
+def ensure_lfg_indexes(conn: sqlite3.Connection) -> None:
+    if not table_exists(conn, "lfg"):
+        return
+
+    # создаём индекс только если нужные колонки реально есть
+    if has_column(conn, "lfg", "expires_at"):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_expires ON lfg(expires_at);")
+
+    if has_column(conn, "lfg", "active") and has_column(conn, "lfg", "expires_at"):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active_expires ON lfg(active, expires_at);")
+
+    conn.commit()
 
 
 def backfill_defaults():
