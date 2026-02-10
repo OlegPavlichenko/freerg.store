@@ -1153,7 +1153,7 @@ def fetch_epic(locale=None, country=None):
 
         if discount_price == 0 and original_price > 0:
             kind = "free_to_keep"
-        elif discount_price > 0 and original_price > 0 and discount_pct >= 99:
+        elif discount_price > 0 and original_price > 0 and discount_pct >= 70:
             kind = "hot_deal"
         else:
             continue  # пропускаем
