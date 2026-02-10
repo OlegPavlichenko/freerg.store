@@ -72,41 +72,18 @@ def db():
     return conn
 
 def ensure_tables(conn: sqlite3.Connection) -> None:
-    # deals
+    # LFG базовая таблица (минимум, без индексов на новые поля)
     conn.execute("""
-      CREATE TABLE IF NOT EXISTS deals (
+      CREATE TABLE IF NOT EXISTS lfg (
         id TEXT PRIMARY KEY,
-        store TEXT,
-        kind TEXT,
-        title TEXT,
-        url TEXT,
-        image_url TEXT,
-        source TEXT,
-        starts_at TEXT,
-        ends_at TEXT,
-        discount_pct INTEGER,
-        price_old REAL,
-        price_new REAL,
-        currency TEXT,
-        posted INTEGER DEFAULT 0,
-        created_at TEXT
-      );
-    """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_posted ON deals(posted);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_created ON deals(created_at);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_kind_store ON deals(kind, store);")
-
-    # free_games
-    conn.execute("""
-      CREATE TABLE IF NOT EXISTS free_games (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        store TEXT NOT NULL,
-        title TEXT NOT NULL,
-        url TEXT NOT NULL UNIQUE,
-        image_url TEXT,
+        created_at TEXT,
+        game TEXT,
+        platform TEXT,
+        region TEXT,
         note TEXT,
-        sort INTEGER DEFAULT 100,
-        created_at TEXT DEFAULT (datetime('now'))
+        tg TEXT,
+        ip TEXT,
+        user_agent TEXT
       );
     """)
 
@@ -127,21 +104,21 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_deal_id ON clicks(deal_id);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_created ON clicks(created_at);")
 
-    # lfg (БЕЗ новых колонок — они добавятся через ensure_lfg_columns)
+    # free_games
     conn.execute("""
-      CREATE TABLE IF NOT EXISTS lfg (
+      CREATE TABLE IF NOT EXISTS free_games (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        created_at TEXT,
-        game TEXT,
-        platform TEXT,
-        mode TEXT,
+        store TEXT NOT NULL,
+        title TEXT NOT NULL,
+        url TEXT NOT NULL UNIQUE,
+        image_url TEXT,
         note TEXT,
-        tg_username TEXT
+        sort INTEGER DEFAULT 100,
+        created_at TEXT DEFAULT (datetime('now'))
       );
     """)
 
     conn.commit()
-
 
 import sqlite3
 
