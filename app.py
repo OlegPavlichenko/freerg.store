@@ -64,29 +64,39 @@ def db():
     conn.execute("PRAGMA temp_store=MEMORY;")
     conn.execute("PRAGMA busy_timeout=5000;")
 
-    # 1) базовые таблицы
-    ensure_tables(conn)
+    # порядок важен
+    ensure_tables(conn)        # таблицы
+    ensure_lfg_columns(conn)   # колонки
+    ensure_lfg_indexes(conn)   # индексы
 
-    # 2) миграции/индексы lfg (ВАЖНО: до старта приложения)
-    ensure_lfg_columns(conn)
-    ensure_lfg_indexes(conn)
+    return conn
 
-    # 3) твои остальные таблицы
+def ensure_tables(conn: sqlite3.Connection) -> None:
+    # deals
     conn.execute("""
       CREATE TABLE IF NOT EXISTS deals (
         id TEXT PRIMARY KEY,
+        store TEXT,
+        kind TEXT,
         title TEXT,
         url TEXT,
+        image_url TEXT,
         source TEXT,
         starts_at TEXT,
         ends_at TEXT,
+        discount_pct INTEGER,
+        price_old REAL,
+        price_new REAL,
+        currency TEXT,
         posted INTEGER DEFAULT 0,
         created_at TEXT
-      )
+      );
     """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_posted ON deals(posted)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_created ON deals(created_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_posted ON deals(posted);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_created ON deals(created_at);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_kind_store ON deals(kind, store);")
 
+    # free_games
     conn.execute("""
       CREATE TABLE IF NOT EXISTS free_games (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,9 +107,10 @@ def db():
         note TEXT,
         sort INTEGER DEFAULT 100,
         created_at TEXT DEFAULT (datetime('now'))
-      )
+      );
     """)
 
+    # clicks
     conn.execute("""
       CREATE TABLE IF NOT EXISTS clicks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,16 +122,12 @@ def db():
         ip TEXT,
         user_agent TEXT,
         referer TEXT
-      )
+      );
     """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_deal_id ON clicks(deal_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_created ON clicks(created_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_deal_id ON clicks(deal_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_clicks_created ON clicks(created_at);")
 
-    conn.commit()
-    return conn
-
-
-def ensure_tables(conn: sqlite3.Connection) -> None:
+    # lfg (БЕЗ новых колонок — они добавятся через ensure_lfg_columns)
     conn.execute("""
       CREATE TABLE IF NOT EXISTS lfg (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,15 +139,9 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
         tg_username TEXT
       );
     """)
+
     conn.commit()
 
-#def ensure_columns() -> None:
-#    conn = db()
-#    try:
-#        ensure_lfg_columns(conn)
-#        ensure_lfg_indexes(conn)
-#    finally:
-#        conn.close()
 
 import sqlite3
 
@@ -161,18 +162,21 @@ def add_column_if_missing(conn: sqlite3.Connection, table: str, col: str, ddl_ty
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl_type};")
 
 def ensure_lfg_columns(conn: sqlite3.Connection) -> None:
+    # таблица точно есть после ensure_tables, но оставим защиту
     if not table_exists(conn, "lfg"):
         return
+
     add_column_if_missing(conn, "lfg", "active", "INTEGER DEFAULT 1")
     add_column_if_missing(conn, "lfg", "expires_at", "TEXT")
     add_column_if_missing(conn, "lfg", "tg_chat_url", "TEXT")
+
     conn.commit()
+
 
 def ensure_lfg_indexes(conn: sqlite3.Connection) -> None:
     if not table_exists(conn, "lfg"):
         return
 
-    # индекс создаём только если колонки реально есть
     if has_column(conn, "lfg", "expires_at"):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_expires ON lfg(expires_at);")
 
@@ -180,6 +184,7 @@ def ensure_lfg_indexes(conn: sqlite3.Connection) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active_expires ON lfg(active, expires_at);")
 
     conn.commit()
+
 
 def backfill_defaults():
     """
