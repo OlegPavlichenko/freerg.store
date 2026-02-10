@@ -2296,7 +2296,31 @@ PAGE = Template("""
                 <h2 class="section-title">Бесплатные игры</h2>
                 <span class="section-count">{{ free_games|length }}</span>
             </div>
-            
+            <div class="lfg-box">
+  <input id="lfg-game" placeholder="Игра (CS2, GTA, Dota)">
+  <button onclick="sendLFG()">Найти тиммейтов</button>
+  <div id="lfg-status"></div>
+</div>
+
+<script>
+async function sendLFG() {
+  const game = document.getElementById("lfg-game").value;
+
+  const res = await fetch("/lfg/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      game: game,
+      platform: "PC",
+      region: "EU"
+    })
+  });
+
+  const data = await res.json();
+  document.getElementById("lfg-status").innerText =
+    data.ok ? "✅ Заявка создана!" : "❌ Ошибка";
+}
+</script>
             <div class="games-grid">
                 {% for game in free_games %}
                 <div class="game-card">
