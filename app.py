@@ -164,7 +164,7 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
     );
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_created ON lfg(created_at);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_expires ON lfg(expires_at);")
+    #conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_expires ON lfg(expires_at);")
     conn.commit()
 
 
