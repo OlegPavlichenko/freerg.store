@@ -1240,17 +1240,27 @@ def epic_url_candidates(e: dict, locale: str) -> list[str]:
             uniq.append(u)
     return uniq
 
-
 def epic_pick_working_url(cands: list[str]) -> str:
+    """
+    Проверяем первые 3 кандидата, но принимаем любой успешный ответ (200-399).
+    Если ничего не работает - возвращаем первый кандидат.
+    """
     headers = {"User-Agent": "Mozilla/5.0"}
-    for u in cands[:3]:  # 🔥 ТОЛЬКО первые 3!
+    
+    for u in cands[:3]:
         try:
-            r = requests.get(u, timeout=5, allow_redirects=True, headers=headers)  # 🔥 timeout=5
-            if r.status_code == 200:
+            r = requests.get(u, timeout=8, allow_redirects=True, headers=headers)
+            # 🔥 Принимаем любой успешный код (200-399)
+            if 200 <= r.status_code < 400:
                 return str(r.url)
-        except Exception:
+        except Exception as e:
+            print(f"  ⚠️ URL failed {u[:50]}: {e}")
             continue
+    
+    # 🔥 Если ничего не сработало - возвращаем первый (offer URL для DLC)
+    print(f"  ⚠️ All URLs failed, using first: {cands[0] if cands else 'none'}")
     return cands[0] if cands else "https://store.epicgames.com/free-games"
+
 
 # --------------------
 # SAVE + POST
