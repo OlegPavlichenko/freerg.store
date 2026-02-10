@@ -150,59 +150,99 @@ def db():
     return conn
 
 def ensure_tables(conn: sqlite3.Connection) -> None:
+    # ... твои существующие CREATE TABLE deals/free_games/clicks ...
+
+    # --- LFG table ---
     conn.execute("""
     CREATE TABLE IF NOT EXISTS lfg (
         id TEXT PRIMARY KEY,
         created_at TEXT,
+        updated_at TEXT,
+        title TEXT,
         game TEXT,
-        region TEXT,
         platform TEXT,
+        region TEXT,
+        lang TEXT,
         note TEXT,
-        tg_user TEXT,
+        tg_url TEXT,
         expires_at TEXT,
-        active INTEGER DEFAULT 1
+        active INTEGER DEFAULT 1,
+        ip TEXT,
+        user_agent TEXT
     );
     """)
+
+    # индексы — только после того, как таблица точно есть
     conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_created ON lfg(created_at);")
-    #conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_expires ON lfg(expires_at);")
-    conn.commit()
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active_expires ON lfg(active, expires_at);")
 
 
-def ensure_columns():
-    """
-    Миграция: добавляем колонки для мульти-магазинов и категорий.
-    Потом создаём индексы по этим колонкам (когда они точно есть).
-    """
+def ensure_columns() -> None:
     conn = db()
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(deals)").fetchall()}
+    try:
+        # Проверяем, есть ли таблица lfg вообще
+        row = conn.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type='table' AND name='lfg'
+        """).fetchone()
 
-    def add(col_def: str):
-        conn.execute(f"ALTER TABLE deals ADD COLUMN {col_def}")
+        if not row:
+            # если таблицы нет — ensure_tables её создаст
+            ensure_tables(conn)
+            conn.commit()
+            return
 
-    if "store" not in cols:
-        add("store TEXT")
-    if "external_id" not in cols:
-        add("external_id TEXT")
-    if "kind" not in cols:
-        add("kind TEXT")  # free_to_keep / free_weekend / ...
-    if "image_url" not in cols:
-        add("image_url TEXT")
+        # Список текущих колонок
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(lfg);").fetchall()}
 
-    if "discount_pct" not in cols:
-        add("discount_pct INTEGER")
-    if "price_old" not in cols:
-        add("price_old REAL")
-    if "price_new" not in cols:
-        add("price_new REAL")
-    if "currency" not in cols:
-        add("currency TEXT")
+        def add_col(sql: str) -> None:
+            try:
+                conn.execute(sql)
+            except Exception:
+                pass
 
-    # индексы на новые колонки — только после миграции
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_store ON deals(store)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_kind ON deals(kind)")
+        # Добавляем недостающие колонки (миграция)
+        if "created_at" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN created_at TEXT;")
+        if "updated_at" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN updated_at TEXT;")
+        if "title" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN title TEXT;")
+        if "game" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN game TEXT;")
+        if "platform" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN platform TEXT;")
+        if "region" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN region TEXT;")
+        if "lang" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN lang TEXT;")
+        if "note" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN note TEXT;")
+        if "tg_url" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN tg_url TEXT;")
+        if "expires_at" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN expires_at TEXT;")
+        if "active" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN active INTEGER DEFAULT 1;")
+        if "ip" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN ip TEXT;")
+        if "user_agent" not in cols:
+            add_col("ALTER TABLE lfg ADD COLUMN user_agent TEXT;")
 
-    conn.commit()
-    conn.close()
+        # Теперь можно безопасно создать индексы (колонки уже точно существуют)
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_created ON lfg(created_at);")
+        except Exception:
+            pass
+
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active_expires ON lfg(active, expires_at);")
+        except Exception:
+            pass
+
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def backfill_defaults():
