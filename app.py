@@ -2906,43 +2906,40 @@ def lfg_new(game: str = "general"):
     """
     return HTMLResponse(html)
 
+from pydantic import BaseModel
+from fastapi import Request, HTTPException
+
+class LfgCreateIn(BaseModel):
+    game: str
+    platform: str = "PC"
+    region: str = "EU"
 
 @app.post("/lfg/create")
-def lfg_create(
-    game: str = Form("general"),
-    title: str = Form(""),
-    note: str = Form(""),
-    when_text: str = Form(""),
-    region: str = Form("eu"),
-    platform: str = Form("pc"),
-):
-    game = normalize_choice(game, ALLOWED_GAMES, "general")
-    region = normalize_choice(region, ALLOWED_REGIONS, "ue")
-    platform = normalize_choice(platform, ALLOWED_PLATFORMS, "pc")
+async def lfg_create(request: Request):
+    # 1) пробуем JSON
+    try:
+        data = await request.json()
+        payload = LfgCreateIn(**data)
+        source = "json"
+    except Exception:
+        # 2) пробуем form, но только если multipart установлен
+        try:
+            form = await request.form()  # <-- требует python-multipart
+            payload = LfgCreateIn(
+                game=str(form.get("game") or ""),
+                platform=str(form.get("platform") or "PC"),
+                region=str(form.get("region") or "EU"),
+            )
+            source = "form"
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Send JSON or install python-multipart for HTML form support",
+            )
 
-    title = clamp_text(title, 80)
-    note = clamp_text(note, 800)
-    when_text = clamp_text(when_text, 60)
-
-    if not title or not note:
-        # простая защита от пустых
-        return RedirectResponse(url=f"/lfg/new?game={game}", status_code=302)
-
-    pid = make_id()
-    created_at = now_iso()
-    expires_at = (datetime.utcnow() + timedelta(hours=24)).replace(microsecond=0).isoformat() + "Z"
-
-    tg_topic_url = TG_TOPICS.get(game) or TG_TOPICS["general"]
-
-    conn = db()
-    conn.execute("""
-        INSERT INTO lfg_posts(id, created_at, game, title, note, region, platform, when_text, tg_topic_url, expires_at, active)
-        VALUES(?,?,?,?,?,?,?,?,?,?,1)
-    """, (pid, created_at, game, title, note, region, platform, when_text, tg_topic_url, expires_at))
-    conn.commit()
-    conn.close()
-
-    return RedirectResponse(url=f"/lfg?game={game}", status_code=302)
+    # тут твоя логика создания заявки:
+    # payload.game / payload.platform / payload.region
+    return {"ok": True, "source": source, "data": payload.model_dump()}
 
 @app.get("/go/lfg/{pid}")
 def go_lfg(
