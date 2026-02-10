@@ -3047,7 +3047,7 @@ def lfg_new(game: str = "general"):
 from pydantic import BaseModel
 import secrets
 
-class LfgCreateIn(BaseModel):
+class LfgCreate(BaseModel):
     game: str
     region: str | None = ""
     platform: str | None = ""
