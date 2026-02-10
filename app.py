@@ -174,7 +174,6 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
 
     # индексы — только после того, как таблица точно есть
     conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_created ON lfg(created_at);")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_lfg_active_expires ON lfg(active, expires_at);")
 
 
 def ensure_columns() -> None:
