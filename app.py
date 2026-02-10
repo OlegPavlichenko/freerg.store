@@ -3055,7 +3055,7 @@ class LfgCreate(BaseModel):
     tg_user: str | None = ""     # @username или username
 
 @app.post("/api/lfg/create")
-def lfg_create_api(payload: LfgCreateIn, request: Request):
+def lfg_create_api(payload: LfgCreate, request: Request):
     conn = db()
 
     game = (payload.game or "").strip()
