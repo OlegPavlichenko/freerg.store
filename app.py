@@ -51,44 +51,6 @@ scheduler = AsyncIOScheduler()
 _scheduler_started = False
 JOB_LOCK = asyncio.Lock()
 
-#--------------------------------------
-# TG (forum conf)
-#--------------------------------------
-
-import secrets
-
-# 1) Сюда вставишь свои ссылки на темы (из Telegram)
-TG_TOPICS = {
-    "general": "https://t.me/freergstore/1",
-    "hot": "https://t.me/freergstore/6",
-    "cs2": "https://t.me/freergstore/8",
-    "bf6": "https://t.me/freergstore/16",
-    "dota2": "https://t.me/freergstore/10",
-    "fortnite": "https://t.me/freergstore/12",
-    "gta": "https://t.me/freergstore/14",
-    "other": "https://t.me/freergstore/21",
-}
-
-ALLOWED_GAMES = {"general", "hot", "cs2", "bf6", "dota2", "fortnite", "gta", "other"}
-ALLOWED_PLATFORMS = {"pc", "ps", "xbox", "mobile", "other"}
-ALLOWED_REGIONS = {"eu", "us", "asia", "other"}
-
-def now_iso() -> str:
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-
-def make_id() -> str:
-    # короткий id, но достаточно случайный
-    return secrets.token_hex(8)
-
-def normalize_choice(v: str | None, allowed: set[str], default: str) -> str:
-    v = (v or "").strip().lower()
-    return v if v in allowed else default
-
-def clamp_text(s: str | None, max_len: int) -> str:
-    s = (s or "").strip()
-    if len(s) > max_len:
-        s = s[:max_len].rstrip() + "…"
-    return s
 
 # --------------------
 # DB helpers
@@ -434,6 +396,45 @@ def price_line(old, new, cur):
     if o:
         return f"{sym}{o}"
     return ""
+
+#--------------------------------------
+# TG (forum conf)
+#--------------------------------------
+
+import secrets
+
+# 1) Сюда вставишь свои ссылки на темы (из Telegram)
+TG_TOPICS = {
+    "general": "https://t.me/freergstore/1",
+    "hot": "https://t.me/freergstore/6",
+    "cs2": "https://t.me/freergstore/8",
+    "bf6": "https://t.me/freergstore/16",
+    "dota2": "https://t.me/freergstore/10",
+    "fortnite": "https://t.me/freergstore/12",
+    "gta": "https://t.me/freergstore/14",
+    "other": "https://t.me/freergstore/21",
+}
+
+ALLOWED_GAMES = {"general", "hot", "cs2", "bf6", "dota2", "fortnite", "gta", "other"}
+ALLOWED_PLATFORMS = {"pc", "ps", "xbox", "mobile", "other"}
+ALLOWED_REGIONS = {"eu", "us", "asia", "other"}
+
+def now_iso() -> str:
+    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+def make_id() -> str:
+    # короткий id, но достаточно случайный
+    return secrets.token_hex(8)
+
+def normalize_choice(v: str | None, allowed: set[str], default: str) -> str:
+    v = (v or "").strip().lower()
+    return v if v in allowed else default
+
+def clamp_text(s: str | None, max_len: int) -> str:
+    s = (s or "").strip()
+    if len(s) > max_len:
+        s = s[:max_len].rstrip() + "…"
+    return s
 
 
 # --------------------
