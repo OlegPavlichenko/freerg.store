@@ -3541,60 +3541,86 @@ def run_job(store: str):
 async def on_startup():
     global _scheduler_started
 
-    # 1) миграция БД
-    #ensure_columns()
-    backfill_defaults()
+    # 1) Миграции схемы БД (обязательно!)
+    try:
+        ensure_columns()
+    except Exception as e:
+        # лучше увидеть ошибку в journalctl, чем молча упасть/сломаться
+        print("STARTUP MIGRATION ERROR:", repr(e))
+        raise
 
-    # 2) startup в проде может вызываться повторно (и при reload тоже)
+    # 2) Нормализация старых записей
+    try:
+        backfill_defaults()
+    except Exception as e:
+        print("STARTUP BACKFILL ERROR:", repr(e))
+        # можно не падать, но я бы пока поднимал ошибку
+        raise
+
+    # 3) Защита от двойного старта (reload/несколько воркеров)
     if _scheduler_started:
         return
 
-    if not scheduler.get_job("steam_job"):
-        scheduler.add_job(
-            run_job,
-            "interval",
-            minutes=STEAM_MIN,
-            id="steam_job",
-            replace_existing=True,
-            kwargs={"store": "steam"},
-        )
+    def add_once(job_id: str, *args, **kwargs):
+        if not scheduler.get_job(job_id):
+            scheduler.add_job(*args, id=job_id, replace_existing=True, **kwargs)
 
-    if not scheduler.get_job("epic_job"):
-        scheduler.add_job(
-            run_job,
-            trigger=CronTrigger(hour=0, minute=5, timezone=BISHKEK_TZ),
-            id="epic_job",
-            replace_existing=True,
-            kwargs={"store": "epic"},
-        )
+    # Steam — каждые STEAM_MIN минут
+    add_once(
+        "steam_job",
+        run_job,
+        "interval",
+        minutes=STEAM_MIN,
+        kwargs={"store": "steam"},
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=60 * 10,
+    )
 
-    if not scheduler.get_job("gog_job"):
-        scheduler.add_job(
-            run_job,
-            trigger=CronTrigger(hour=0, minute=5, timezone=BISHKEK_TZ),
-            id="gog_job",
-            replace_existing=True,
-            kwargs={"store": "gog"},
-        )
+    # Epic/GOG/Prime — ежедневно 00:05 по Бишкеку
+    daily = CronTrigger(hour=0, minute=5, timezone=BISHKEK_TZ)
 
-    if not scheduler.get_job("prime_job"):
-        scheduler.add_job(
-            run_job,
-            trigger=CronTrigger(hour=0, minute=5, timezone=BISHKEK_TZ),
-            id="prime_job",
-            replace_existing=True,
-            kwargs={"store": "prime"},
-        )
+    add_once(
+        "epic_job",
+        run_job,
+        trigger=daily,
+        kwargs={"store": "epic"},
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=60 * 30,
+    )
 
-    if not scheduler.get_job("cleanup_job"):
-        scheduler.add_job(
-            cleanup_expired,
-            "interval",
-            hours=24,
-            id="cleanup_job",
-            replace_existing=True,
-            kwargs={"keep_days": 7},
-        )
+    add_once(
+        "gog_job",
+        run_job,
+        trigger=daily,
+        kwargs={"store": "gog"},
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=60 * 30,
+    )
+
+    add_once(
+        "prime_job",
+        run_job,
+        trigger=daily,
+        kwargs={"store": "prime"},
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=60 * 30,
+    )
+
+    # Чистка раз в сутки
+    add_once(
+        "cleanup_job",
+        cleanup_expired,
+        "interval",
+        hours=24,
+        kwargs={"keep_days": 7},
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=60 * 60,
+    )
 
     if not scheduler.running:
         scheduler.start()
