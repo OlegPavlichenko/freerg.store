@@ -2756,8 +2756,6 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         LIMIT 24
     """).fetchall()
 
-    conn.close()
-
     def allow_time(ends_at: str | None) -> bool:
         if is_active_end(ends_at):
             return True
@@ -2864,6 +2862,8 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         ORDER BY created_at DESC
         LIMIT 12
     """, (datetime.utcnow().isoformat(),)).fetchall()
+
+    conn.close()
 
     lfg = []
     for r in lfg_rows:
