@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from apscheduler.triggers.cron import CronTrigger
 
 import random
+import uuid
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Template
@@ -72,20 +73,33 @@ def db():
     return conn
 
 def ensure_tables(conn: sqlite3.Connection) -> None:
-    # LFG базовая таблица (минимум, без индексов на новые поля)
+    # 🔥 DEALS - ОСНОВНАЯ ТАБЛИЦА!
     conn.execute("""
-      CREATE TABLE IF NOT EXISTS lfg (
+      CREATE TABLE IF NOT EXISTS deals (
         id TEXT PRIMARY KEY,
-        created_at TEXT,
-        game TEXT,
-        platform TEXT,
-        region TEXT,
-        note TEXT,
-        tg TEXT,
-        ip TEXT,
-        user_agent TEXT
+        store TEXT,
+        external_id TEXT,
+        kind TEXT,
+        title TEXT,
+        url TEXT,
+        image_url TEXT,
+        source TEXT,
+        starts_at TEXT,
+        ends_at TEXT,
+        discount_pct INTEGER,
+        price_old REAL,
+        price_new REAL,
+        currency TEXT,
+        posted INTEGER DEFAULT 0,
+        created_at TEXT
       );
     """)
+    
+    # Индексы для deals
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_posted ON deals(posted);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_store ON deals(store);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_kind ON deals(kind);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_deals_created ON deals(created_at);")
 
     # clicks
     conn.execute("""
@@ -137,6 +151,31 @@ def has_column(conn: sqlite3.Connection, table: str, col: str) -> bool:
 def add_column_if_missing(conn: sqlite3.Connection, table: str, col: str, ddl_type: str) -> None:
     if not has_column(conn, table, col):
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl_type};")
+
+def ensure_columns() -> None:
+    """
+    Миграция для deals - добавляем недостающие колонки.
+    """
+    conn = db()
+    
+    # Проверяем наличие колонок
+    if not table_exists(conn, "deals"):
+        conn.close()
+        return
+    
+    # Добавляем недостающие колонки если их нет
+    add_column_if_missing(conn, "deals", "store", "TEXT")
+    add_column_if_missing(conn, "deals", "external_id", "TEXT")
+    add_column_if_missing(conn, "deals", "kind", "TEXT")
+    add_column_if_missing(conn, "deals", "image_url", "TEXT")
+    add_column_if_missing(conn, "deals", "discount_pct", "INTEGER")
+    add_column_if_missing(conn, "deals", "price_old", "REAL")
+    add_column_if_missing(conn, "deals", "price_new", "REAL")
+    add_column_if_missing(conn, "deals", "currency", "TEXT")
+    
+    conn.commit()
+    conn.close()
+
 
 def ensure_lfg_columns(conn: sqlite3.Connection) -> None:
     # таблица точно есть после ensure_tables, но оставим защиту
@@ -332,18 +371,6 @@ def fmt_price(x):
     except Exception:
         return str(x)
 
-def price_line(old, new, cur):
-    o = fmt_price(old)
-    n = fmt_price(new)
-    if not n and not o:
-        return ""
-    cur = (cur or "").upper()
-    if o and n:
-        return f"{o} → {n} {cur}".strip()
-    if n:
-        return f"{n} {cur}".strip()
-    return f"{o} {cur}".strip()
-
 def normalize_currency(cur: str | None) -> str:
     c = (cur or "").strip().upper()
     if c in ("USD", "$"):
@@ -355,17 +382,6 @@ def normalize_currency(cur: str | None) -> str:
 def currency_symbol(cur: str | None) -> str:
     c = normalize_currency(cur)
     return "$" if c == "USD" else ("₽" if c == "RUB" else "")
-
-def fmt_price(x):
-    if x is None:
-        return None
-    try:
-        v = float(x)
-        if v.is_integer():
-            return str(int(v))
-        return f"{v:.2f}".rstrip("0").rstrip(".")
-    except Exception:
-        return str(x)
 
 def price_line(old, new, cur):
     sym = currency_symbol(cur)
@@ -2841,7 +2857,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         })
     
     lfg_rows = conn.execute("""
-        SELECT id, created_at, game, region, platform, note, tg_user, expires_at
+        SELECT id, created_at, game, region, platform, note, tg, expires_at
         FROM lfg
         WHERE active=1
           AND (expires_at IS NULL OR expires_at > ?)
@@ -2858,7 +2874,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             "region": r["region"],
             "platform": r["platform"],
             "note": r["note"],
-            "tg_user": r["tg_user"],
+            "tg": r["tg"],
             "tg_url": f"{SITE_BASE}/tg/lfg/{r['id']}",
         })
 
