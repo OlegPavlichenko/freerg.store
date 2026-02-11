@@ -53,6 +53,111 @@ _scheduler_started = False
 JOB_LOCK = asyncio.Lock()
 
 
+
+# ==========================================
+# 🛡️ АНТИСПАМ И АДМИНКА
+# ==========================================
+
+import hashlib
+import re
+
+# Хэш пароля админа (по умолчанию: "admin123")
+# Генерируй свой: echo -n "твой_пароль" | sha256sum
+ADMIN_PASSWORD_HASH = os.getenv(
+    "ADMIN_PASSWORD_HASH",
+    "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"  # admin123
+)
+
+def validate_lfg_text(text: str) -> tuple[bool, str | None]:
+    """
+    Проверяет текст на спам/ссылки/контакты.
+    Возвращает (valid, error_message)
+    """
+    if not text:
+        return True, None
+    
+    text_lower = text.lower()
+    text_clean = text.replace(" ", "").replace("-", "")
+    
+    # 🔥 ЗАПРЕТ ССЫЛОК
+    link_patterns = [
+        r'https?://',           # http://, https://
+        r'www\.',               # www.
+        r'\.(com|ru|org|net|io|gg|me|cc|tv|link)',  # домены
+        r't\.me',               # Telegram
+        r'discord\.gg',         # Discord
+        r'vk\.com',             # VK
+        r'youtube\.com',        # YouTube
+        r'twitch\.tv',          # Twitch
+    ]
+    
+    for pattern in link_patterns:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            return False, "❌ Ссылки запрещены"
+    
+    # 🔥 ЗАПРЕТ EMAIL
+    if '@' in text:
+        email_domains = ['gmail', 'mail', 'yandex', 'outlook', 'icloud', 'yahoo', 'proton']
+        for domain in email_domains:
+            if domain in text_lower:
+                return False, "❌ Email запрещены"
+    
+    # 🔥 ЗАПРЕТ ТЕЛЕФОНОВ
+    phone_patterns = [
+        r'\+\d{10,}',           # +79991234567
+        r'8-?800',              # 8-800
+        r'\d{3}[-\s]?\d{3}[-\s]?\d{2}[-\s]?\d{2}',  # 999-123-45-67
+    ]
+    
+    for pattern in phone_patterns:
+        if re.search(pattern, text_clean):
+            return False, "❌ Телефоны запрещены"
+    
+    # 🔥 ЗАПРЕТ ПОДОЗРИТЕЛЬНЫХ СЛОВ (опционально)
+    spam_words = ['casino', 'viagra', 'buy now', 'click here', 'free money']
+    for word in spam_words:
+        if word in text_lower:
+            return False, "❌ Подозрительный текст"
+    
+    return True, None
+
+
+def check_rate_limit(ip: str, hours: int = 1, limit: int = 3) -> bool:
+    """
+    Проверяет лимит заявок с одного IP.
+    Возвращает True если можно создавать, False если превышен лимит.
+    """
+    if not ip or ip == "unknown":
+        return True  # не блокируем если IP неизвестен
+    
+    conn = db()
+    cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+    
+    count = conn.execute("""
+        SELECT COUNT(*) FROM lfg
+        WHERE ip=? AND created_at > ?
+    """, (ip, cutoff)).fetchone()[0]
+    
+    conn.close()
+    return count < limit
+
+
+def check_admin_password(password: str) -> bool:
+    """Проверяет пароль админа"""
+    if not password:
+        return False
+    hash_input = hashlib.sha256(password.encode()).hexdigest()
+    return hash_input == ADMIN_PASSWORD_HASH
+
+
+def require_admin(request: Request):
+    """Проверяет что пользователь залогинен как админ"""
+    token = request.cookies.get("admin_token")
+    if token != ADMIN_PASSWORD_HASH:
+        return RedirectResponse("/admin/login", status_code=302)
+    return None
+
+
 # --------------------
 # DB helpers
 # --------------------
@@ -3073,25 +3178,47 @@ def lfg_create_api(payload: LfgCreate, request: Request):
 
     game = (payload.game or "").strip()
     if not game:
-        return {"ok": False, "error": "game_required"}
+        conn.close()
+        return {"ok": False, "error": "Укажите игру"}
 
     region = (payload.region or "").strip()
     platform = (payload.platform or "").strip()
     note = (payload.note or "").strip()
     tg_user = (payload.tg_user or "").strip()
 
-    # нормализуем @username
+    # 🔥 ВАЛИДАЦИЯ ТЕКСТА
+    valid, error = validate_lfg_text(note)
+    if not valid:
+        conn.close()
+        return {"ok": False, "error": error}
+    
+    valid, error = validate_lfg_text(tg_user)
+    if not valid:
+        conn.close()
+        return {"ok": False, "error": error}
+    
+    valid, error = validate_lfg_text(game)
+    if not valid:
+        conn.close()
+        return {"ok": False, "error": error}
+
+    # 🔥 RATE LIMIT
+    ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(ip, hours=1, limit=3):
+        conn.close()
+        return {"ok": False, "error": "⏱ Слишком много заявок! Подождите час."}
+
+    # Нормализуем @username
     if tg_user.startswith("@"):
         tg_user = tg_user[1:]
 
     now = datetime.utcnow()
-    expires = now + timedelta(hours=24)  # заявки живут 24 часа
-
+    expires = now + timedelta(hours=24)
     lfg_id = secrets.token_hex(8)
 
     conn.execute("""
-        INSERT INTO lfg (id, created_at, game, region, platform, note, tg_user, expires_at, active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        INSERT INTO lfg (id, created_at, game, region, platform, note, tg_user, expires_at, active, ip)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
     """, (
         lfg_id,
         now.isoformat(),
@@ -3101,12 +3228,13 @@ def lfg_create_api(payload: LfgCreate, request: Request):
         note[:280],
         tg_user[:64],
         expires.isoformat(),
+        ip,
     ))
     conn.commit()
 
-    # (опционально) логируем как "квази-deal"
+    # Логируем создание
     try:
-        log_click(conn, f"lfg:{lfg_id}", request, src="site", utm_campaign="freeredeemgames", utm_content="lfg_created")
+        log_click(conn, f"lfg:{lfg_id}", request, src="site", utm_campaign="lfg", utm_content="created")
     except Exception:
         pass
 
@@ -3551,6 +3679,436 @@ def run_job(store: str):
     # APScheduler вызывает обычную функцию (sync),
     # поэтому запускаем async-джоб через asyncio.run()
     asyncio.run(job_async(store=store))
+
+
+# ==========================================
+# 🛡️ АДМИН-ПАНЕЛЬ
+# ==========================================
+
+@app.get("/admin/login", response_class=HTMLResponse)
+def admin_login_page(error: str = ""):
+    error_msg = f"<div style='color:red;margin:10px 0'>{error}</div>" if error else ""
+    
+    return f"""
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Admin Login</title>
+        <style>
+            body {{
+                font-family: system-ui, -apple-system, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0;
+            }}
+            .login-box {{
+                background: white;
+                padding: 40px;
+                border-radius: 16px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+                width: 100%;
+                max-width: 400px;
+            }}
+            h2 {{
+                margin: 0 0 24px 0;
+                color: #333;
+                text-align: center;
+            }}
+            input {{
+                width: 100%;
+                padding: 12px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                font-size: 16px;
+                margin-bottom: 16px;
+                box-sizing: border-box;
+            }}
+            button {{
+                width: 100%;
+                padding: 12px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+            }}
+            button:hover {{
+                opacity: 0.9;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="login-box">
+            <h2>🔐 Admin Login</h2>
+            {error_msg}
+            <form method="post" action="/admin/auth">
+                <input type="password" name="password" placeholder="Пароль" required autofocus>
+                <button type="submit">Войти</button>
+            </form>
+            <div style="text-align:center;margin-top:20px;opacity:0.6">
+                <a href="/" style="color:#667eea">← На главную</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+
+from fastapi import Form
+
+@app.post("/admin/auth")
+def admin_auth(password: str = Form(...)):
+    if check_admin_password(password):
+        response = RedirectResponse("/admin/lfg", status_code=302)
+        response.set_cookie("admin_token", ADMIN_PASSWORD_HASH, max_age=3600*24*7)  # 7 дней
+        return response
+    return RedirectResponse("/admin/login?error=Неверный пароль", status_code=302)
+
+
+@app.get("/admin/logout")
+def admin_logout():
+    response = RedirectResponse("/admin/login", status_code=302)
+    response.delete_cookie("admin_token")
+    return response
+
+
+@app.get("/admin/lfg", response_class=HTMLResponse)
+def admin_lfg_panel(request: Request, filter: str = "all"):
+    # Проверка авторизации
+    redirect_check = require_admin(request)
+    if redirect_check:
+        return redirect_check
+    
+    conn = db()
+    
+    # Фильтры
+    if filter == "active":
+        rows = conn.execute("""
+            SELECT id, created_at, game, region, platform, note, tg_user, ip, expires_at
+            FROM lfg
+            WHERE active=1
+            ORDER BY created_at DESC
+            LIMIT 100
+        """).fetchall()
+    elif filter == "expired":
+        rows = conn.execute("""
+            SELECT id, created_at, game, region, platform, note, tg_user, ip, expires_at
+            FROM lfg
+            WHERE expires_at < ?
+            ORDER BY created_at DESC
+            LIMIT 100
+        """, (datetime.utcnow().isoformat(),)).fetchall()
+    else:  # all
+        rows = conn.execute("""
+            SELECT id, created_at, game, region, platform, note, tg_user, ip, expires_at
+            FROM lfg
+            ORDER BY created_at DESC
+            LIMIT 100
+        """).fetchall()
+    
+    # Статистика
+    total = conn.execute("SELECT COUNT(*) FROM lfg").fetchone()[0]
+    active = conn.execute("SELECT COUNT(*) FROM lfg WHERE active=1").fetchone()[0]
+    expired = conn.execute("SELECT COUNT(*) FROM lfg WHERE expires_at < ?", 
+                          (datetime.utcnow().isoformat(),)).fetchone()[0]
+    
+    conn.close()
+    
+    # HTML
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Admin - LFG</title>
+        <style>
+            body {{
+                font-family: system-ui, -apple-system, sans-serif;
+                background: #0a0e1a;
+                color: #e2e8f0;
+                margin: 0;
+                padding: 20px;
+            }}
+            .container {{
+                max-width: 1200px;
+                margin: 0 auto;
+            }}
+            .header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }}
+            .stats {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+                margin-bottom: 20px;
+            }}
+            .stat-card {{
+                background: #1a1f36;
+                padding: 20px;
+                border-radius: 12px;
+                border: 1px solid rgba(255,255,255,0.1);
+            }}
+            .stat-value {{
+                font-size: 2rem;
+                font-weight: 700;
+                color: #667eea;
+            }}
+            .stat-label {{
+                color: #94a3b8;
+                font-size: 0.9rem;
+                margin-top: 5px;
+            }}
+            .filters {{
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+            }}
+            .filter-btn {{
+                padding: 10px 20px;
+                background: #1a1f36;
+                color: #e2e8f0;
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 8px;
+                text-decoration: none;
+                cursor: pointer;
+                transition: all 0.2s;
+            }}
+            .filter-btn:hover {{
+                background: #252a44;
+                border-color: #667eea;
+            }}
+            .filter-btn.active {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-color: transparent;
+            }}
+            .card {{
+                background: #1a1f36;
+                padding: 20px;
+                margin-bottom: 15px;
+                border-radius: 12px;
+                border: 1px solid rgba(255,255,255,0.1);
+            }}
+            .card-header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 12px;
+            }}
+            .game-title {{
+                font-size: 1.2rem;
+                font-weight: 700;
+                color: #e2e8f0;
+            }}
+            .meta {{
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin: 12px 0;
+                font-size: 0.9rem;
+            }}
+            .meta-item {{
+                background: rgba(255,255,255,0.05);
+                padding: 4px 10px;
+                border-radius: 6px;
+                color: #94a3b8;
+            }}
+            .note {{
+                margin: 12px 0;
+                padding: 12px;
+                background: rgba(0,0,0,0.2);
+                border-radius: 8px;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }}
+            .actions {{
+                display: flex;
+                gap: 10px;
+                margin-top: 15px;
+            }}
+            .btn {{
+                padding: 8px 16px;
+                border-radius: 8px;
+                border: none;
+                cursor: pointer;
+                font-weight: 600;
+                transition: all 0.2s;
+            }}
+            .btn-delete {{
+                background: #ef4444;
+                color: white;
+            }}
+            .btn-delete:hover {{
+                background: #dc2626;
+            }}
+            .btn-activate {{
+                background: #10b981;
+                color: white;
+            }}
+            .btn-activate:hover {{
+                background: #059669;
+            }}
+            .btn-logout {{
+                background: transparent;
+                color: #94a3b8;
+                border: 1px solid rgba(255,255,255,0.1);
+                padding: 8px 16px;
+            }}
+            .expired {{
+                opacity: 0.5;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🛡️ Admin Panel - LFG</h1>
+                <a href="/admin/logout" class="btn btn-logout">Выйти</a>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value">{total}</div>
+                    <div class="stat-label">Всего заявок</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{active}</div>
+                    <div class="stat-label">Активные</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{expired}</div>
+                    <div class="stat-label">Истекшие</div>
+                </div>
+            </div>
+            
+            <div class="filters">
+                <a href="/admin/lfg?filter=all" class="filter-btn {'active' if filter == 'all' else ''}">
+                    📋 Все ({total})
+                </a>
+                <a href="/admin/lfg?filter=active" class="filter-btn {'active' if filter == 'active' else ''}">
+                    ✅ Активные ({active})
+                </a>
+                <a href="/admin/lfg?filter=expired" class="filter-btn {'active' if filter == 'expired' else ''}">
+                    ⏰ Истекшие ({expired})
+                </a>
+            </div>
+            
+            <div>
+    """
+    
+    for r in rows:
+        lfg_id, created, game, region, platform, note, tg_user, ip, expires = r
+        
+        # Проверяем истёк ли срок
+        is_expired = False
+        if expires:
+            try:
+                exp_dt = datetime.fromisoformat(expires.replace('Z', '+00:00'))
+                is_expired = exp_dt < datetime.utcnow().replace(tzinfo=None)
+            except:
+                pass
+        
+        card_class = "card expired" if is_expired else "card"
+        
+        html += f"""
+        <div class="{card_class}">
+            <div class="card-header">
+                <div class="game-title">{game}</div>
+                <div style="font-size:0.85rem;color:#64748b">
+                    {created[:16] if created else ''}
+                </div>
+            </div>
+            
+            <div class="meta">
+                {f'<span class="meta-item">🌍 {region}</span>' if region else ''}
+                {f'<span class="meta-item">🎮 {platform}</span>' if platform else ''}
+                {f'<span class="meta-item">💬 @{tg_user}</span>' if tg_user else ''}
+                {f'<span class="meta-item">🔒 {ip[:15] if ip else "?"}</span>'}
+                {f'<span class="meta-item">⏰ до {expires[:16]}</span>' if expires else ''}
+            </div>
+            
+            {f'<div class="note">{note}</div>' if note else ''}
+            
+            <div class="actions">
+                <button class="btn btn-delete" onclick="deletePost('{lfg_id}')">
+                    🗑 Удалить
+                </button>
+            </div>
+        </div>
+        """
+    
+    if not rows:
+        html += "<div class='card'>Заявок нет</div>"
+    
+    html += """
+            </div>
+        </div>
+        
+        <script>
+        async function deletePost(id) {
+            if(!confirm('Удалить эту заявку?')) return;
+            
+            const r = await fetch(`/admin/lfg/delete/${id}`, {method: 'POST'});
+            if(r.ok) {
+                alert('Удалено!');
+                location.reload();
+            } else {
+                alert('Ошибка удаления');
+            }
+        }
+        </script>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(html)
+
+
+@app.post("/admin/lfg/delete/{lfg_id}")
+def admin_delete_lfg(lfg_id: str, request: Request):
+    # Проверка авторизации
+    redirect_check = require_admin(request)
+    if redirect_check:
+        return redirect_check
+    
+    conn = db()
+    conn.execute("DELETE FROM lfg WHERE id=?", (lfg_id,))
+    conn.commit()
+    conn.close()
+    
+    return {"ok": True}
+
+
+# Очистка истекших заявок (можно вызывать вручную или по крону)
+@app.get("/admin/cleanup")
+def admin_cleanup(request: Request):
+    redirect_check = require_admin(request)
+    if redirect_check:
+        return redirect_check
+    
+    conn = db()
+    deleted = conn.execute("""
+        DELETE FROM lfg
+        WHERE expires_at < ?
+    """, (datetime.utcnow().isoformat(),)).rowcount
+    conn.commit()
+    conn.close()
+    
+    return {"ok": True, "deleted": deleted}
+
 
 
 @app.on_event("startup")
