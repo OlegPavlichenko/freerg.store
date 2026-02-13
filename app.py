@@ -237,6 +237,30 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
       );
     """)
 
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS votes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT,
+        deal_id TEXT,
+        vote INTEGER,              -- +1 / -1
+        ip TEXT,
+        user_agent TEXT
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_votes_deal_id ON votes(deal_id);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_votes_created ON votes(created_at);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_votes_ip ON votes(ip);")
+
+    # (опционально) защита от дублей "1 голос на 24ч" на уровне базы:
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS vote_locks (
+        deal_id TEXT,
+        ip TEXT,
+        day TEXT,                  -- YYYY-MM-DD
+        PRIMARY KEY (deal_id, ip, day)
+    );
+    """)
+
     conn.commit()
 
 import sqlite3
@@ -464,6 +488,23 @@ def log_click(
         conn.commit()
     except Exception:
         pass
+
+import secrets
+
+VOTE_COOKIE_NAME = "frg_vid"  # visitor id
+
+def get_client_ip(request: Request) -> str | None:
+    # если у тебя прокси/CF — можно будет расширить X-Forwarded-For
+    return request.client.host if request.client else None
+
+def get_or_set_vid(request: Request) -> tuple[str, bool]:
+    """
+    Возвращает (vid, need_set_cookie)
+    """
+    vid = request.cookies.get(VOTE_COOKIE_NAME)
+    if vid and len(vid) >= 16:
+        return vid, False
+    return secrets.token_urlsafe(16), True
     
 def fmt_price(x):
     if x is None:
@@ -501,6 +542,43 @@ def price_line(old, new, cur):
     if o:
         return f"{sym}{o}"
     return ""
+
+def calc_savings(conn: sqlite3.Connection) -> dict:
+    """
+    Считаем по кликам и deals:
+    savings_today, savings_all, clicks_today, clicks_all
+    """
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    # created_at у тебя ISO, значит LIKE 'YYYY-MM-DD%'
+    row = conn.execute("""
+        SELECT
+          COALESCE(SUM(CASE
+            WHEN d.price_old IS NOT NULL AND d.price_new IS NOT NULL
+            THEN (d.price_old - d.price_new)
+            ELSE 0 END), 0) AS saved,
+          COUNT(*) AS clicks
+        FROM clicks c
+        JOIN deals d ON d.id = c.deal_id
+        WHERE c.created_at LIKE ? || '%'
+    """, (today,)).fetchone()
+
+    row_all = conn.execute("""
+        SELECT
+          COALESCE(SUM(CASE
+            WHEN d.price_old IS NOT NULL AND d.price_new IS NOT NULL
+            THEN (d.price_old - d.price_new)
+            ELSE 0 END), 0) AS saved,
+          COUNT(*) AS clicks
+        FROM clicks c
+        JOIN deals d ON d.id = c.deal_id
+    """).fetchone()
+
+    return {
+        "saved_today": float(row[0] or 0),
+        "clicks_today": int(row[1] or 0),
+        "saved_all": float(row_all[0] or 0),
+        "clicks_all": int(row_all[1] or 0),
+    }
 
 #--------------------------------------
 # TG (forum conf)
@@ -2188,7 +2266,12 @@ PAGE = Template("""
             <div class="brand">
               <h1>🎮 Free Redeem Games Store</h1>
               <p>Актуальные бесплатные игры и скидки</p>
-              </div>
+                </div>
+                <div class="mini-stats">
+  <div class="mini-stat">💸 Сэкономили сегодня: <b>${{ "%.2f"|format(savings.saved_today) }}</b></div>
+  <div class="mini-stat">📦 Клики сегодня: <b>{{ savings.clicks_today }}</b></div>
+  <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>${{ "%.2f"|format(savings.saved_all) }}</b></div>
+</div>
               <div class="header-divider">
                 <button class="collapse-btn" id="collapseBtn" type="button">Свернуть ▲</button>
                 <div class="filters">
@@ -2460,6 +2543,10 @@ PAGE = Template("""
 
         <a href="{{ game.go_url }}" target="_blank" class="btn">Купить →</a>
       </div>
+                <div class="vote-row" data-deal="{{ game.id }}">
+  <button class="vote-btn" data-vote="1">👍 <span class="v-up">0</span></button>
+  <button class="vote-btn" data-vote="-1">👎 <span class="v-down">0</span></button>
+</div>
     </div>
     {% endfor %}
   </div>
@@ -2659,7 +2746,35 @@ async function submitLfg(){
   setTimeout(applyPadding, 200);
 })();
 </script>
+<script>
+async function vote(dealId, v, root){
+  try{
+    const r = await fetch("/api/vote", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({deal_id: dealId, vote: v})
+    });
+    const j = await r.json();
 
+    if (j.up !== undefined) root.querySelector(".v-up").textContent = j.up;
+    if (j.down !== undefined) root.querySelector(".v-down").textContent = j.down;
+
+    if (!j.ok && j.error === "already_voted"){
+      root.classList.add("voted");
+    }
+  } catch(e){}
+}
+
+document.addEventListener("click", (e)=>{
+  const btn = e.target.closest(".vote-btn");
+  if(!btn) return;
+  const root = btn.closest(".vote-row");
+  const dealId = root.getAttribute("data-deal");
+  const v = parseInt(btn.getAttribute("data-vote"), 10);
+  vote(dealId, v, root);
+});
+</script>
+                
 </body>
 </html>
 """)
@@ -3012,6 +3127,8 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     )
     last_update = datetime.now().strftime("%d.%m.%Y %H:%M")
 
+    stats = calc_savings(db())
+
     return PAGE.render(
         keep=keep,
         weekend=weekend,
@@ -3029,6 +3146,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         generate_placeholder=lambda t, s: "",
         lfg=lfg,
         tg_group_url=TG_GROUP_URL,
+        savings=stats,
     )
 
 from fastapi import Form, Request
@@ -4200,6 +4318,70 @@ async def on_startup():
         scheduler.start()
 
     _scheduler_started = True
+
+from pydantic import BaseModel, Field
+
+class VoteIn(BaseModel):
+    deal_id: str = Field(min_length=6, max_length=64)
+    vote: int  # +1 or -1
+
+from fastapi import Cookie
+from fastapi.responses import JSONResponse
+
+@app.post("/api/vote")
+def api_vote(payload: VoteIn, request: Request):
+    if payload.vote not in (1, -1):
+        return JSONResponse({"ok": False, "error": "bad_vote"}, status_code=400)
+
+    conn = db()
+    ip = get_client_ip(request) or ""
+    ua = request.headers.get("user-agent") or ""
+
+    vid, need_set_cookie = get_or_set_vid(request)
+    day = datetime.utcnow().strftime("%Y-%m-%d")
+
+    # 1) лок на сутки по IP (и одновременно можно считать это антиспамом)
+    try:
+        conn.execute(
+            "INSERT INTO vote_locks(deal_id, ip, day) VALUES (?, ?, ?)",
+            (payload.deal_id, ip, day),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # уже голосовал сегодня
+        row = conn.execute("""
+            SELECT
+              SUM(CASE WHEN vote=1 THEN 1 ELSE 0 END) AS up,
+              SUM(CASE WHEN vote=-1 THEN 1 ELSE 0 END) AS down
+            FROM votes
+            WHERE deal_id=?
+        """, (payload.deal_id,)).fetchone()
+        conn.close()
+        resp = JSONResponse({"ok": False, "error": "already_voted", "up": row[0] or 0, "down": row[1] or 0})
+        return resp
+
+    # 2) пишем голос
+    conn.execute("""
+        INSERT INTO votes (created_at, deal_id, vote, ip, user_agent)
+        VALUES (?, ?, ?, ?, ?)
+    """, (datetime.utcnow().isoformat(), payload.deal_id, int(payload.vote), ip, ua))
+    conn.commit()
+
+    row = conn.execute("""
+        SELECT
+          SUM(CASE WHEN vote=1 THEN 1 ELSE 0 END) AS up,
+          SUM(CASE WHEN vote=-1 THEN 1 ELSE 0 END) AS down
+        FROM votes
+        WHERE deal_id=?
+    """, (payload.deal_id,)).fetchone()
+    conn.close()
+
+    resp = JSONResponse({"ok": True, "up": row[0] or 0, "down": row[1] or 0})
+
+    if need_set_cookie:
+        # на год
+        resp.set_cookie(VOTE_COOKIE_NAME, vid, max_age=31536000, httponly=True, samesite="Lax")
+    return resp
 
 @app.get("/debug_images")
 def debug_images(limit: int = 5):
