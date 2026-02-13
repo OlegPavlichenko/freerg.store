@@ -2257,6 +2257,47 @@ PAGE = Template("""
         html {
             scroll-behavior: smooth;
         }
+                
+        /* Центр и красивый лайк-блок */
+.vote-wrap{
+  display:flex;
+  justify-content:center;   /* по центру ячейки */
+  align-items:center;
+  gap:10px;
+  margin-top:10px;
+}
+
+.vote-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:8px 12px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;
+  background:rgba(255,255,255,.06);
+  color:inherit;
+  cursor:pointer;
+  transition:transform .08s ease, background .15s ease, border-color .15s ease;
+  user-select:none;
+}
+
+.vote-btn:hover{
+  background:rgba(255,255,255,.10);
+  border-color:rgba(255,255,255,.22);
+}
+
+.vote-btn:active{
+  transform:scale(.98);
+}
+
+.vote-ico{ font-size:18px; line-height:1; }
+.vote-count{ font-weight:700; opacity:.9; }
+
+/* подсветка выбранного */
+.vote-btn.is-active.vote-up{ background:rgba(0,255,153,.12); border-color:rgba(0,255,153,.25); }
+.vote-btn.is-active.vote-down{ background:rgba(255,80,80,.12); border-color:rgba(255,80,80,.25); }
+                
     </style>
 </head>
 <body>
@@ -2433,6 +2474,17 @@ PAGE = Template("""
                         <a href="{{ game.go_url }}" target="_blank" class="btn">
                             Играть →
                         </a>
+                <div class="vote-wrap" data-deal-id="{{ game.id }}">
+  <button class="vote-btn vote-up" type="button" aria-label="Нравится" data-vote="1">
+    <span class="vote-ico">👍</span>
+    <span class="vote-count" data-count="up">{{ game.up or 0 }}</span>
+  </button>
+
+  <button class="vote-btn vote-down" type="button" aria-label="Не нравится" data-vote="-1">
+    <span class="vote-ico">👎</span>
+    <span class="vote-count" data-count="down">{{ game.down or 0 }}</span>
+  </button>
+</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -2776,7 +2828,41 @@ document.addEventListener("click", (e)=>{
   vote(dealId, v, root);
 });
 </script>
-                
+
+<script>
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".vote-btn");
+  if (!btn) return;
+
+  const wrap = btn.closest(".vote-wrap");
+  const dealId = wrap?.dataset?.dealId;
+  const vote = parseInt(btn.dataset.vote, 10);
+
+  if (!dealId || !vote) return;
+
+  try {
+    const res = await fetch("/api/vote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deal_id: dealId, vote })
+    });
+
+    const data = await res.json();
+    if (!data || data.ok !== true) return;
+
+    // обновляем числа
+    wrap.querySelector('[data-count="up"]').textContent = data.up ?? 0;
+    wrap.querySelector('[data-count="down"]').textContent = data.down ?? 0;
+
+    // визуально отмечаем выбор
+    wrap.querySelectorAll(".vote-btn").forEach(b => b.classList.remove("is-active"));
+    btn.classList.add("is-active");
+  } catch (err) {
+    // молча, чтобы не бесить юзера
+  }
+});
+</script>
+                 
 </body>
 </html>
 """)
