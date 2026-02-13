@@ -2264,17 +2264,18 @@ PAGE = Template("""
     <div class="header">
         <div class="header-content">
             <div class="brand">
+                <div class="mini-stats">
+  <div class="mini-stat">💸 Сэкономили сегодня: <b>${{ "%.2f"|format(savings.saved_today) }}</b></div>
+  <div class="mini-stat">📦 Клики сегодня: <b>{{ savings.clicks_today }}</b></div>
+  <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>${{ "%.2f"|format(savings.saved_all) }}</b></div>
+</div>
               <h1>🎮 Free Redeem Games Store</h1>
               <p>Актуальные бесплатные игры и скидки</p>
                 </div>
                 
               <div class="header-divider">
                 <button class="collapse-btn" id="collapseBtn" type="button">Свернуть ▲</button>
-                <div class="mini-stats">
-  <div class="mini-stat">💸 Сэкономили сегодня: <b>${{ "%.2f"|format(savings.saved_today) }}</b></div>
-  <div class="mini-stat">📦 Клики сегодня: <b>{{ savings.clicks_today }}</b></div>
-  <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>${{ "%.2f"|format(savings.saved_all) }}</b></div>
-</div>
+                
                 <div class="filters">
                   <!-- Группа: Тип -->
                   <div class="filter-group">
@@ -2571,7 +2572,7 @@ PAGE = Template("""
 
     <div style="display:grid; gap:10px;">
       <input id="lfg_game" placeholder="Игра (например: CS2)" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;">
-      <input id="lfg_region" placeholder="Регион (EU/RU/NA)" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;">
+      <input id="lfg_region" placeholder="Регион (EU/RU/US/ASIA)" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;">
       <input id="lfg_platform" placeholder="Платформа (PC/PS/Xbox/Mobile)" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;">
       <input id="lfg_tg" placeholder="Твой Telegram @username (необязательно)" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;">
       <textarea id="lfg_note" placeholder="Комментарий (необязательно)" rows="3" style="padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0b0b0b; color:#fff;"></textarea>
