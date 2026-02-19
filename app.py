@@ -456,6 +456,18 @@ def cleanup_expired(keep_days: int = 7) -> int:
     conn.close()
     return len(to_delete)
 
+import secrets
+from fastapi import Response
+
+def get_or_set_vid(request: Request, response: Response | None = None) -> str:
+    vid = request.cookies.get("vid")
+    if not vid:
+        vid = secrets.token_urlsafe(16)
+        if response is not None:
+            # 180 дней
+            response.set_cookie("vid", vid, max_age=180*24*3600, httponly=True, samesite="Lax")
+    return vid
+
 def log_click(
     conn: sqlite3.Connection,
     deal_id: str,
@@ -463,27 +475,26 @@ def log_click(
     src: str | None = None,
     utm_campaign: str | None = None,
     utm_content: str | None = None,
+    visitor_id: str | None = None
 ):
     try:
-        # если стоит nginx/proxy — IP будет в X-Forwarded-For
-        xff = request.headers.get("x-forwarded-for", "")
-        ip = (xff.split(",")[0].strip() if xff else "") or (request.client.host if request.client else None)
-
-        ua = (request.headers.get("user-agent") or "")[:400]
-        ref = (request.headers.get("referer") or "")[:500]
+        ip = request.client.host if request.client else None
+        ua = request.headers.get("user-agent")
+        ref = request.headers.get("referer")
 
         conn.execute("""
-            INSERT INTO clicks (created_at, deal_id, src, utm_campaign, utm_content, ip, user_agent, referer)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO clicks (created_at, deal_id, src, utm_campaign, utm_content, ip, user_agent, referer, visitor_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             datetime.utcnow().isoformat(),
             deal_id,
-            (src or "")[:50],
-            (utm_campaign or "")[:80],
-            (utm_content or "")[:80],
+            src,
+            utm_campaign,
+            utm_content,
             ip,
             ua,
-            ref
+            ref,
+            visitor_id
         ))
         conn.commit()
     except Exception:
@@ -497,15 +508,6 @@ def get_client_ip(request: Request) -> str | None:
     # если у тебя прокси/CF — можно будет расширить X-Forwarded-For
     return request.client.host if request.client else None
 
-def get_or_set_vid(request: Request) -> tuple[str, bool]:
-    """
-    Возвращает (vid, need_set_cookie)
-    """
-    vid = request.cookies.get(VOTE_COOKIE_NAME)
-    if vid and len(vid) >= 16:
-        return vid, False
-    return secrets.token_urlsafe(16), True
-    
 def fmt_price(x):
     if x is None:
         return None
@@ -1775,6 +1777,8 @@ PAGE = Template("""
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0b0f19">
     <title>Free Redeem Games Store - Бесплатные игры</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🎮</text></svg>">
     <style>
@@ -2597,9 +2601,20 @@ PAGE = Template("""
 
         <a href="{{ game.go_url }}" target="_blank" class="btn">Купить →</a>
       </div>
-                <div class="vote-row" data-deal="{{ game.id }}">
-  <button class="vote-btn" data-vote="1">👍 <span class="v-up">0</span></button>
-  <button class="vote-btn" data-vote="-1">👎 <span class="v-down">0</span></button>
+                <div class="vote-wrap" data-deal-id="{{ game.id }}">
+  <button class="vote-btn vote-up" type="button" aria-label="Нравится" data-vote="1">
+    <svg class="vote-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2 21h4V9H2v12zm20-11.5c0-.83-.67-1.5-1.5-1.5H14.3l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L13.9 1 7.6 7.3C7.22 7.68 7 8.2 7 8.75V19c0 1.1.9 2 2 2h7.5c.83 0 1.54-.5 1.84-1.22l2.58-6.02c.05-.13.08-.27.08-.41V9.5z"/>
+    </svg>
+    <span class="vote-count" data-count="up">{{ game.up or 0 }}</span>
+  </button>
+
+  <button class="vote-btn vote-down" type="button" aria-label="Не нравится" data-vote="-1">
+    <svg class="vote-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M22 3h-4v12h4V3zM2 14.5c0 .83.67 1.5 1.5 1.5H9.7l-.95 4.57-.03.32c0 .41.17.79.44 1.06L10.1 23l6.3-6.3c.38-.38.6-.9.6-1.45V5c0-1.1-.9-2-2-2H7.5c-.83 0-1.54.5-1.84 1.22L3.08 10.24c-.05.13-.08.27-.08.41v3.85z"/>
+    </svg>
+    <span class="vote-count" data-count="down">{{ game.down or 0 }}</span>
+  </button>
 </div>
     </div>
     {% endfor %}
@@ -2862,7 +2877,13 @@ document.addEventListener("click", async (e) => {
   }
 });
 </script>
-                 
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js');
+}
+</script>
+
 </body>
 </html>
 """)
@@ -2914,25 +2935,34 @@ DEAL_PAGE = Template("""
 """)
 
 @app.get("/d/{deal_id}", response_class=HTMLResponse)
-def deal_page(deal_id: str):
+def deal_page(deal_id: str, request: Request):
     conn = db()
     row = conn.execute("""
         SELECT store, kind, title, url, image_url, ends_at
         FROM deals
-        WHERE id=?
-        LIMIT 1
+        WHERE id=? LIMIT 1
     """, (deal_id,)).fetchone()
-    conn.close()
 
     if not row:
+        conn.close()
         return HTMLResponse("<h3 style='font-family:system-ui'>Deal not found</h3><p><a href='/'>Back</a></p>", status_code=404)
 
     st, kind, title, url, image_url, ends_at = row
     st = (st or "").strip().lower()
     badge = store_badge(st)
-
-    # картинку берём по твоей логике
     img_main, _ = images_for_row(st, url, image_url)
+
+    # если пришли напрямую на карточку (не через /go), можно залогировать
+    # vid выставляем через Set-Cookie -> нужен Response объект, поэтому тут проще НЕ ставить cookie.
+    # (cookie уже появится через /go или /out)
+    # Если хочешь ставить cookie и тут — скажи, сделаем через HTMLResponse + set_cookie.
+    if request.query_params.get("src") is None:
+        try:
+            log_click(conn, deal_id, request, src="card")
+        except Exception:
+            pass
+
+    conn.close()
 
     return DEAL_PAGE.render(
         title=title,
@@ -3569,15 +3599,23 @@ def go_lfg(
 def go_deal(deal_id: str, request: Request):
     conn = db()
 
-    # логируем клик (src/utm берём из query)
-    src = request.query_params.get("src")
+    src = request.query_params.get("src") or "tg"
     utm_campaign = request.query_params.get("utm_campaign")
     utm_content = request.query_params.get("utm_content")
-    log_click(conn, deal_id, request, src=src, utm_campaign=utm_campaign, utm_content=utm_content)
+
+    resp = RedirectResponse(url=f"/d/{deal_id}", status_code=302)
+
+    # ставим cookie тут
+    vid = get_or_set_vid(request, resp)
+
+    log_click(conn, deal_id, request,
+              src=src,
+              utm_campaign=utm_campaign,
+              utm_content=utm_content,
+              visitor_id=vid)
 
     conn.close()
-    return RedirectResponse(url=f"/d/{deal_id}", status_code=302)
-
+    return resp
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
@@ -3614,6 +3652,20 @@ STATS_PAGE = Template("""
 <body>
 <div class="wrap">
   <div class="row">
+      <div class="row">
+    <div class="card">
+      <div class="muted">Users ({{ days }}d, no bots)</div>
+      <div class="h">{{ users_total }}</div>
+    </div>
+    <div class="card">
+      <div class="muted">New / Returning</div>
+      <div class="h">{{ users_new }} / {{ users_returning }}</div>
+    </div>
+    <div class="card">
+      <div class="muted">Returning rate</div>
+      <div class="h">{{ returning_rate }}</div>
+    </div>
+  </div>
     <div class="card">
       <div class="muted">Клики за 24 часа</div>
       <div class="h">{{ clicks_24h }}</div>
@@ -3629,6 +3681,39 @@ STATS_PAGE = Template("""
   </div>
 
   <div class="grid2">
+      <div class="card" style="margin-top:12px">
+    <div class="h" style="font-size:18px">Пики по часам (Asia/Bishkek)</div>
+    <div class="muted">клики (без bot) за последние {{ days }} дней</div>
+    <table>
+      <thead><tr><th>Час</th><th>Клики</th><th style="width:55%"></th></tr></thead>
+      <tbody>
+      {% for x in hours %}
+        <tr>
+          <td>{{ x.h }}:00</td>
+          <td><b>{{ x.c }}</b></td>
+          <td><div class="bar"><div style="width: {{ (x.c / hour_max * 100) | int }}%"></div></div></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+      <div class="card" style="margin-top:12px">
+    <div class="h" style="font-size:18px">TG → Store по форматам (utm_content)</div>
+    <div class="muted">что лучше конвертит (tg клики → out клики)</div>
+    <table>
+      <thead><tr><th>Формат</th><th>TG</th><th>OUT</th><th>Conv</th></tr></thead>
+      <tbody>
+      {% for f in formats %}
+        <tr>
+          <td><b>{{ f.fmt }}</b></td>
+          <td>{{ f.tg }}</td>
+          <td>{{ f.out }}</td>
+          <td><b>{{ f.conv }}</b></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
     <div class="card">
       <div class="h" style="font-size:18px">Динамика</div>
       <div class="muted">последние {{ days }} дней</div>
@@ -3688,11 +3773,157 @@ def stats_html(days: int = 7, top: int = 15):
         SELECT COUNT(*) FROM clicks
         WHERE datetime(created_at) >= datetime('now', ?)
     """, (f"-{days} days",)).fetchone()[0]
+        # уникальные пользователи (visitor_id) за диапазон
+    users_total = conn.execute("""
+        SELECT COUNT(DISTINCT visitor_id)
+        FROM clicks
+        WHERE visitor_id IS NOT NULL
+          AND datetime(created_at) >= datetime('now', ?)
+          AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+    """, (f"-{days} days",)).fetchone()[0]
+
+    # returning: был ДО начала окна
+    users_returning = conn.execute("""
+        WITH in_range AS (
+          SELECT DISTINCT visitor_id
+          FROM clicks
+          WHERE visitor_id IS NOT NULL
+            AND datetime(created_at) >= datetime('now', ?)
+            AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+        )
+        SELECT COUNT(*)
+        FROM in_range r
+        WHERE EXISTS (
+          SELECT 1 FROM clicks c
+          WHERE c.visitor_id = r.visitor_id
+            AND datetime(c.created_at) < datetime('now', ?)
+        )
+    """, (f"-{days} days", f"-{days} days")).fetchone()[0]
+
+    users_new = max(users_total - users_returning, 0)
+    returning_rate = (users_returning / users_total) if users_total else 0.0
+
+    # пики по часам (по Бишкеку +6)
+    hours = conn.execute("""
+        SELECT strftime('%H', datetime(created_at, '+6 hours')) as h, COUNT(*) cnt
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+          AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+        GROUP BY h
+        ORDER BY h
+    """, (f"-{days} days",)).fetchall()
+    hour_map = {h: c for h, c in hours}
+    hour_series = [{"h": f"{i:02d}", "c": int(hour_map.get(f"{i:02d}", 0))} for i in range(24)]
+    hour_max = max([x["c"] for x in hour_series], default=1)
+
+    # TG форматы: tg->out по utm_content
+    fmt_rows = conn.execute("""
+        WITH tg AS (
+          SELECT COALESCE(utm_content,'') fmt, COUNT(*) cnt
+          FROM clicks
+          WHERE src='tg' AND datetime(created_at) >= datetime('now', ?)
+          GROUP BY fmt
+        ),
+        out AS (
+          SELECT COALESCE(utm_content,'') fmt, COUNT(*) cnt
+          FROM clicks
+          WHERE src='out' AND datetime(created_at) >= datetime('now', ?)
+          GROUP BY fmt
+        )
+        SELECT tg.fmt, tg.cnt tg_clicks, COALESCE(out.cnt,0) out_clicks
+        FROM tg
+        LEFT JOIN out ON out.fmt = tg.fmt
+        ORDER BY (1.0*COALESCE(out.cnt,0)/tg.cnt) DESC, tg_clicks DESC
+        LIMIT 12
+    """, (f"-{days} days", f"-{days} days")).fetchall()
+
+    formats = []
+    for fmt, tg_clicks, out_clicks in fmt_rows:
+        conv = (out_clicks / tg_clicks) if tg_clicks else 0.0
+        formats.append({
+            "fmt": fmt or "(empty)",
+            "tg": tg_clicks,
+            "out": out_clicks,
+            "conv": round(conv, 3)
+        })
 
     clicks_24h = conn.execute("""
         SELECT COUNT(*) FROM clicks
         WHERE datetime(created_at) >= datetime('now', '-1 day')
     """).fetchone()[0]
+        # уникальные пользователи (visitor_id) за диапазон
+    users_total = conn.execute("""
+        SELECT COUNT(DISTINCT visitor_id)
+        FROM clicks
+        WHERE visitor_id IS NOT NULL
+          AND datetime(created_at) >= datetime('now', ?)
+          AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+    """, (f"-{days} days",)).fetchone()[0]
+
+    # returning: был ДО начала окна
+    users_returning = conn.execute("""
+        WITH in_range AS (
+          SELECT DISTINCT visitor_id
+          FROM clicks
+          WHERE visitor_id IS NOT NULL
+            AND datetime(created_at) >= datetime('now', ?)
+            AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+        )
+        SELECT COUNT(*)
+        FROM in_range r
+        WHERE EXISTS (
+          SELECT 1 FROM clicks c
+          WHERE c.visitor_id = r.visitor_id
+            AND datetime(c.created_at) < datetime('now', ?)
+        )
+    """, (f"-{days} days", f"-{days} days")).fetchone()[0]
+
+    users_new = max(users_total - users_returning, 0)
+    returning_rate = (users_returning / users_total) if users_total else 0.0
+
+    # пики по часам (по Бишкеку +6)
+    hours = conn.execute("""
+        SELECT strftime('%H', datetime(created_at, '+6 hours')) as h, COUNT(*) cnt
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+          AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+        GROUP BY h
+        ORDER BY h
+    """, (f"-{days} days",)).fetchall()
+    hour_map = {h: c for h, c in hours}
+    hour_series = [{"h": f"{i:02d}", "c": int(hour_map.get(f"{i:02d}", 0))} for i in range(24)]
+    hour_max = max([x["c"] for x in hour_series], default=1)
+
+    # TG форматы: tg->out по utm_content
+    fmt_rows = conn.execute("""
+        WITH tg AS (
+          SELECT COALESCE(utm_content,'') fmt, COUNT(*) cnt
+          FROM clicks
+          WHERE src='tg' AND datetime(created_at) >= datetime('now', ?)
+          GROUP BY fmt
+        ),
+        out AS (
+          SELECT COALESCE(utm_content,'') fmt, COUNT(*) cnt
+          FROM clicks
+          WHERE src='out' AND datetime(created_at) >= datetime('now', ?)
+          GROUP BY fmt
+        )
+        SELECT tg.fmt, tg.cnt tg_clicks, COALESCE(out.cnt,0) out_clicks
+        FROM tg
+        LEFT JOIN out ON out.fmt = tg.fmt
+        ORDER BY (1.0*COALESCE(out.cnt,0)/tg.cnt) DESC, tg_clicks DESC
+        LIMIT 12
+    """, (f"-{days} days", f"-{days} days")).fetchall()
+
+    formats = []
+    for fmt, tg_clicks, out_clicks in fmt_rows:
+        conv = (out_clicks / tg_clicks) if tg_clicks else 0.0
+        formats.append({
+            "fmt": fmt or "(empty)",
+            "tg": tg_clicks,
+            "out": out_clicks,
+            "conv": round(conv, 3)
+        })
 
     series = conn.execute("""
         SELECT substr(created_at, 1, 10) as day, COUNT(*) as cnt
@@ -3707,6 +3938,7 @@ def stats_html(days: int = 7, top: int = 15):
         FROM clicks c
         LEFT JOIN deals d ON d.id = c.deal_id
         WHERE datetime(c.created_at) >= datetime('now', ?)
+            AND c.src = 'out'
         GROUP BY c.deal_id
         ORDER BY cnt DESC
         LIMIT ?
@@ -3724,8 +3956,20 @@ def stats_html(days: int = 7, top: int = 15):
         "link": f"{SITE_BASE}/d/{deal_id}",
     } for deal_id, cnt, title, store in rows]
 
-    return STATS_PAGE.render(days=days, clicks_total=clicks_total, clicks_24h=clicks_24h, daily=daily, top=top_items)
-
+    return STATS_PAGE.render(
+        days=days,
+        clicks_total=clicks_total,
+        clicks_24h=clicks_24h,
+        daily=daily,
+        top=top_items,
+        users_total=users_total,
+        users_new=users_new,
+        users_returning=users_returning,
+        returning_rate=round(returning_rate, 3),
+        hours=hour_series,
+        hour_max=hour_max,
+        formats=formats,
+    )
 
 @app.get("/stats")
 def stats(days: int = 7, top: int = 15):
@@ -3801,6 +4045,78 @@ def stats(days: int = 7, top: int = 15):
         "top": top_items,
     }
 
+
+@app.get("/stats_hours")
+def stats_hours(days: int = 7):
+    if days < 1: days = 1
+    if days > 90: days = 90
+
+    conn = db()
+
+    # created_at у тебя UTC isoformat → используем datetime(created_at)
+    # Если хочешь по Бишкеку (+06), добавь '+6 hours'
+    rows = conn.execute("""
+        SELECT strftime('%H', datetime(created_at, '+6 hours')) as hour, COUNT(*) cnt
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+          AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+        GROUP BY hour
+        ORDER BY hour
+    """, (f"-{days} days",)).fetchall()
+
+    conn.close()
+
+    # заполним отсутствующие часы нулями
+    m = {h: c for h, c in rows}
+    series = [{"hour": f"{i:02d}", "clicks": int(m.get(f"{i:02d}", 0))} for i in range(24)]
+    peak = max(series, key=lambda x: x["clicks"]) if series else {"hour":"00","clicks":0}
+
+    return {"range_days": days, "series": series, "peak": peak}
+
+@app.get("/stats_retention")
+def stats_retention(days: int = 7):
+    if days < 1: days = 1
+    if days > 90: days = 90
+
+    conn = db()
+
+    # users that appeared in range
+    total_users = conn.execute("""
+        SELECT COUNT(DISTINCT visitor_id)
+        FROM clicks
+        WHERE visitor_id IS NOT NULL
+          AND datetime(created_at) >= datetime('now', ?)
+          AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+    """, (f"-{days} days",)).fetchone()[0]
+
+    # returning: had activity BEFORE range start
+    returning = conn.execute("""
+        WITH in_range AS (
+          SELECT DISTINCT visitor_id
+          FROM clicks
+          WHERE visitor_id IS NOT NULL
+            AND datetime(created_at) >= datetime('now', ?)
+            AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+        )
+        SELECT COUNT(*)
+        FROM in_range r
+        WHERE EXISTS (
+          SELECT 1 FROM clicks c
+          WHERE c.visitor_id = r.visitor_id
+            AND datetime(c.created_at) < datetime('now', ?)
+        )
+    """, (f"-{days} days", f"-{days} days")).fetchone()[0]
+
+    new_users = max(total_users - returning, 0)
+
+    conn.close()
+    return {
+        "range_days": days,
+        "users_total": total_users,
+        "users_new": new_users,
+        "users_returning": returning,
+        "returning_rate": round((returning/total_users), 3) if total_users else 0.0
+    }
 
 @app.get("/count")
 def count_rows():
@@ -4602,21 +4918,248 @@ def stats_funnel(days: int = 7, top: int = 15):
 
     return {"range_days": days, "by_src": funnel, "top_conversion": top_conv}
 
+@app.get("/stats_tg_formats")
+def stats_tg_formats(days: int = 7):
+    if days < 1: days = 1
+    if days > 90: days = 90
+
+    conn = db()
+
+    rows = conn.execute("""
+        WITH tg AS (
+          SELECT COALESCE(utm_content,'') as fmt, COUNT(*) cnt
+          FROM clicks
+          WHERE src='tg' AND datetime(created_at) >= datetime('now', ?)
+          GROUP BY fmt
+        ),
+        out AS (
+          SELECT COALESCE(utm_content,'') as fmt, COUNT(*) cnt
+          FROM clicks
+          WHERE src='out' AND datetime(created_at) >= datetime('now', ?)
+          GROUP BY fmt
+        )
+        SELECT tg.fmt,
+               tg.cnt as tg_clicks,
+               COALESCE(out.cnt,0) as out_clicks
+        FROM tg
+        LEFT JOIN out ON out.fmt = tg.fmt
+        ORDER BY (1.0*COALESCE(out.cnt,0)/tg.cnt) DESC, tg_clicks DESC
+    """, (f"-{days} days", f"-{days} days")).fetchall()
+
+    conn.close()
+
+    items = []
+    for fmt, tg_clicks, out_clicks in rows:
+        conv = (out_clicks / tg_clicks) if tg_clicks else 0.0
+        items.append({
+            "utm_content": fmt,
+            "tg_clicks": tg_clicks,
+            "out_clicks": out_clicks,
+            "conv": round(conv, 3)
+        })
+    return {"range_days": days, "formats": items}
+
+from fastapi.responses import JSONResponse
+from datetime import datetime
+
+@app.get("/stats_live")
+def stats_live(minutes: int = 60):
+    if minutes < 5: minutes = 5
+    if minutes > 24*60: minutes = 24*60
+
+    conn = db()
+
+    # кликов за последние N минут
+    clicks = conn.execute("""
+        SELECT COUNT(*)
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+    """, (f"-{minutes} minutes",)).fetchone()[0]
+
+    # уникальные IP (не идеал, но достаточно для лайва)
+    uniq_ip = conn.execute("""
+        SELECT COUNT(DISTINCT ip)
+        FROM clicks
+        WHERE datetime(created_at) >= datetime('now', ?)
+          AND COALESCE(user_agent,'') NOT LIKE '%bot%'
+    """, (f"-{minutes} minutes",)).fetchone()[0]
+
+    # последние 10 кликов
+    last = conn.execute("""
+        SELECT created_at, deal_id, src, utm_content
+        FROM clicks
+        ORDER BY id DESC
+        LIMIT 10
+    """).fetchall()
+
+    conn.close()
+
+    return {
+        "minutes": minutes,
+        "clicks": clicks,
+        "uniq_ip": uniq_ip,
+        "last": [
+            {"at": a, "deal_id": d, "src": s or "", "utm_content": u or ""}
+            for a, d, s, u in last
+        ],
+        "server_utc": datetime.utcnow().isoformat()
+    }
+
+from fastapi.responses import HTMLResponse
+
+DASHBOARD_HTML = """
+<!doctype html><html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>freerg • dashboard</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:24px;background:#0b0f19;color:#e8eefc}
+  .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .card{background:#121a2a;border:1px solid #1f2a44;border-radius:14px;padding:14px}
+  .kpi{font-size:28px;font-weight:800}
+  .muted{opacity:.75}
+  table{width:100%;border-collapse:collapse;margin-top:10px}
+  td{padding:8px;border-top:1px solid #1f2a44;font-size:13px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head><body>
+<h1 style="margin:0 0 10px">freerg • real-time</h1>
+<div class="muted" id="meta"></div>
+
+<div class="grid" style="margin-top:12px">
+  <div class="card">
+    <div class="muted">Clicks (last <span id="mins">60</span> min)</div>
+    <div class="kpi" id="clicks">—</div>
+  </div>
+  <div class="card">
+    <div class="muted">Unique IP (no bots)</div>
+    <div class="kpi" id="uniq">—</div>
+  </div>
+  <div class="card">
+    <div class="muted">Refresh</div>
+    <div class="kpi"><span id="sec">—</span>s</div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:12px">
+  <div class="muted">Last 10 clicks</div>
+  <table id="tbl"></table>
+</div>
+
+<script>
+let t = 10;
+async function tick(){
+  try{
+    const r = await fetch('/stats_live?minutes=60', {cache:'no-store'});
+    const j = await r.json();
+    document.getElementById('mins').textContent = j.minutes;
+    document.getElementById('clicks').textContent = j.clicks;
+    document.getElementById('uniq').textContent = j.uniq_ip;
+    document.getElementById('meta').textContent = 'server utc: ' + j.server_utc;
+
+    const rows = j.last.map(x => 
+      `<tr><td>${(x.at||'').replace('T',' ').slice(0,19)}</td><td>${x.deal_id}</td><td>${x.src}</td><td>${x.utm_content}</td></tr>`
+    ).join('');
+    document.getElementById('tbl').innerHTML = `<tr><td class="muted">time</td><td class="muted">deal</td><td class="muted">src</td><td class="muted">utm</td></tr>` + rows;
+  }catch(e){}
+}
+function countdown(){
+  document.getElementById('sec').textContent = t;
+  t--;
+  if(t < 0){ t = 10; tick(); }
+}
+tick(); setInterval(countdown, 1000);
+</script>
+</body></html>
+"""
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
+    return DASHBOARD_HTML
+
+from fastapi.responses import RedirectResponse
 
 @app.get("/out/{deal_id}")
-def out_deal(deal_id: str, request: Request):
+def out(deal_id: str, request: Request):
     conn = db()
+
     row = conn.execute("SELECT url FROM deals WHERE id=? LIMIT 1", (deal_id,)).fetchone()
-    if not row:
-        conn.close()
-        return RedirectResponse(url="/", status_code=302)
+    out_url = row[0] if row and row[0] else "/"
 
-    (url,) = row
+    resp = RedirectResponse(url=out_url, status_code=302)
+    vid = get_or_set_vid(request, resp)
+    log_click(conn, deal_id, request, src="out", visitor_id=vid)
 
-    # логируем как отдельное событие: src=out
-    log_click(conn, deal_id, request, src="out", utm_campaign="freeredeemgames", utm_content="out")
     conn.close()
-    return RedirectResponse(url=url, status_code=302)
+    return resp
+
+
+from fastapi.responses import JSONResponse
+
+@app.get("/manifest.json")
+def manifest():
+    return JSONResponse({
+        "name": "FreeRedeemGames",
+        "short_name": "freerg",
+        "start_url": "/?src=pwa",
+        "display": "standalone",
+        "background_color": "#0b0f19",
+        "theme_color": "#0b0f19",
+        "icons": [
+            {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png"}
+        ]
+    })
+
+from fastapi.responses import Response
+
+SW_JS = r"""
+const CACHE = 'freerg-v1';
+const CORE = ['/', '/manifest.json'];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)));
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(self.clients.claim());
+});
+
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  const url = new URL(req.url);
+
+  // только свой домен
+  if (url.origin !== location.origin) return;
+
+  // для html: network-first (чтобы обновлялось)
+  if (req.headers.get('accept')?.includes('text/html')) {
+    e.respondWith(
+      fetch(req).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(req, copy));
+        return res;
+      }).catch(() => caches.match(req).then(r => r || caches.match('/')))
+    );
+    return;
+  }
+
+  // для статики: cache-first
+  e.respondWith(
+    caches.match(req).then(cached => cached || fetch(req).then(res => {
+      const copy = res.clone();
+      caches.open(CACHE).then(c => c.put(req, copy));
+      return res;
+    }))
+  );
+});
+"""
+
+@app.get("/service-worker.js")
+def service_worker():
+    return Response(SW_JS, media_type="application/javascript")
+
 
 
 @app.get("/debug_hot")
