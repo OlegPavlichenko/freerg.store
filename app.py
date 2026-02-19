@@ -2252,30 +2252,45 @@ PAGE = Template("""
             .scroll-to-top { width: 45px; height: 45px; bottom: 20px; right: 20px; font-size: 1.3rem; }
         }
                 
-        /* мини-статистика уводим вправо */
-        .mini-stats{
-            position:relative;
-            top:10px;
-            right:20px;
+       .header-content{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
 
-            display:flex;
-            flex-direction:column;
-            gap:6px;
+/* DESKTOP: справа сверху */
+.mini-stats{
+  position:absolute;
+  top:10px;
+  right:20px;
 
-            text-align:right;
-            font-size:14px;
-            opacity:.9;
-        }
+  display:flex;
+  flex-direction:column;
+  gap:6px;
 
-        .mini-stats{
-            background:rgba(255,255,255,.05);
-            padding:10px 14px;
-            border-radius:14px;
-            border:1px solid rgba(255,255,255,.08);
-            backdrop-filter:blur(6px);
-        }        
+  text-align:right;
+  font-size:14px;
+  opacity:.9;
 
-        
+  background:rgba(255,255,255,.05);
+  padding:10px 14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.08);
+  backdrop-filter:blur(6px);
+}
+
+/* MOBILE: превращаем в обычный блок, чтобы не перекрывал */
+@media (max-width:900px){
+  .mini-stats{
+    position:static;        /* ключевое */
+    width:100%;
+    max-width:520px;
+    margin:0 auto 12px auto;
+    text-align:center;
+  }
+}
+                 
         /* 💻 БОЛЬШИЕ ЭКРАНЫ */
         @media (min-width: 1400px) {
             .games-grid {
