@@ -1870,6 +1870,29 @@ PAGE = Template("""
             font-size:14px;
             opacity:.9;
         }
+                
+        /* мини-статистика уводим вправо */
+        .mini-stats{
+            position:absolute;
+            top:10px;
+            right:20px;
+
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+
+            text-align:right;
+            font-size:14px;
+            opacity:.9;
+        }
+
+        .mini-stats{
+            background:rgba(255,255,255,.05);
+            padding:10px 14px;
+            border-radius:14px;
+            border:1px solid rgba(255,255,255,.08);
+            backdrop-filter:blur(6px);
+        }        
         
         .brand {
             margin-bottom: 12px;
@@ -2252,30 +2275,6 @@ PAGE = Template("""
             .scroll-to-top { width: 45px; height: 45px; bottom: 20px; right: 20px; font-size: 1.3rem; }
         }
                 
-        /* мини-статистика уводим вправо */
-        .mini-stats{
-            position:absolute;
-            top:10px;
-            right:20px;
-
-            display:flex;
-            flex-direction:column;
-            gap:6px;
-
-            text-align:right;
-            font-size:14px;
-            opacity:.9;
-        }
-
-        .mini-stats{
-            background:rgba(255,255,255,.05);
-            padding:10px 14px;
-            border-radius:14px;
-            border:1px solid rgba(255,255,255,.08);
-            backdrop-filter:blur(6px);
-        }        
-
-        
         /* 💻 БОЛЬШИЕ ЭКРАНЫ */
         @media (min-width: 1400px) {
             .games-grid {
