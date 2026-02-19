@@ -1777,8 +1777,12 @@ PAGE = Template("""
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <meta name="theme-color" content="#0a0e1a">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0b0f19">
+    <meta name="robots" content="noindex,nofollow">
     <title>Free Redeem Games Store - Бесплатные игры</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🎮</text></svg>">
     <style>
@@ -2884,6 +2888,15 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/static/sw.js").catch(()=>{});
+  });
+}
+</script>
+                
+
 </body>
 </html>
 """)
@@ -2933,6 +2946,9 @@ DEAL_PAGE = Template("""
 </body>
 </html>
 """)
+
+from fastapi.staticfiles import StaticFiles
+app.mount("/static", StaticFiles(directory="/opt/freerg/static"), name="static")
 
 @app.get("/d/{deal_id}", response_class=HTMLResponse)
 def deal_page(deal_id: str, request: Request):
@@ -3760,7 +3776,25 @@ STATS_PAGE = Template("""
 </html>
 """)
 
-@app.get("/stats_html", response_class=HTMLResponse)
+import os, secrets
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
+security = HTTPBasic()
+
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "Mysupersecret!")
+
+def require_basic(credentials: HTTPBasicCredentials = Depends(security)):
+    ok_user = secrets.compare_digest(credentials.username, ADMIN_USER)
+    ok_pass = secrets.compare_digest(credentials.password, ADMIN_PASS)
+    if not (ok_user and ok_pass):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+@app.get("/stats_html", response_class=HTMLResponse, dependencies=[Depends(require_basic)])
 def stats_html(days: int = 7, top: int = 15):
     if days < 1: days = 1
     if days > 90: days = 90
@@ -3970,6 +4004,7 @@ def stats_html(days: int = 7, top: int = 15):
         hour_max=hour_max,
         formats=formats,
     )
+
 
 @app.get("/stats")
 def stats(days: int = 7, top: int = 15):
