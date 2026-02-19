@@ -1818,17 +1818,16 @@ PAGE = Template("""
         }
                 
         .collapse-btn{
-        margin-top:10px;
-        padding:8px 12px;
-        border-radius:10px;
-        border:1px solid var(--border);
-        background: rgba(255,255,255,.06);
-        color: var(--text-primary);
-        font-weight:700;
+            margin-top:10px;
+            padding:10px 12px;
+            border-radius:12px;
+            border:1px solid rgba(255,255,255,.12);
+            background:rgba(255,255,255,.06);
+            color:#e2e8f0;
+            font-weight:700;
+            cursor:pointer;
         }
-
-        .header.collapsed .filters{ display:none; }
-        .header.collapsed .brand p{ display:none; } /* опционально */
+        .collapse-btn:hover{ background:rgba(255,255,255,.10); }
 
         
         /* ШАПКА */
@@ -2323,48 +2322,95 @@ PAGE = Template("""
                 </div>
                 
               <div class="header-divider">
-                <button class="collapse-btn" id="collapseBtn" type="button">Свернуть ▲</button>
-                
-                <div class="filters">
-                  <!-- Группа: Тип -->
-                  <div class="filter-group">
-                    <a href="/?kind=all&store={{ store }}" class="filter-btn {% if kind == 'all' %}active{% endif %}">
-                        Все
-                    </a>
-                    <a href="/?kind=keep&store={{ store }}" class="filter-btn {% if kind == 'keep' %}active{% endif %}">
-                        🎁 Навсегда
-                    </a>
-                    <a href="/?kind=weekend&store={{ store }}" class="filter-btn {% if kind == 'weekend' %}active{% endif %}">
-                        ⏱ Временно
-                    </a>
-                    <a href="/?kind=deals&store={{ store }}" class="filter-btn {% if kind == 'deals' %}active{% endif %}">
-                        💸 Скидки
-                    </a>
-                    <a href="/?kind=free&store={{ store }}" class="filter-btn {% if kind == 'free' %}active{% endif %}">
-                        🔥 F2P
-                    </a>
-                  </div>
-                
-                  <!-- Группа: Магазин -->
-                  <div class="filter-group">
-                    <a href="/?store=steam&kind={{ kind }}" class="filter-btn {% if store == 'steam' %}active{% endif %}">
-                        🎮 Steam
-                    </a>
-                    <a href="/?store=epic&kind={{ kind }}" class="filter-btn {% if store == 'epic' %}active{% endif %}">
-                        🟦 Epic
-                    </a>
-                    <a href="/?store=gog&kind={{ kind }}" class="filter-btn {% if store == 'gog' %}active{% endif %}">
-                        🟪 GOG
-                    </a>
-                    <a href="/?store=prime&kind={{ kind }}" class="filter-btn {% if store == 'prime' %}active{% endif %}">
-                        🟨 Prime
-                    </a>
-                    <a href="/?store=all&kind={{ kind }}" class="filter-btn {% if store == 'all' %}active{% endif %}">
-                        📦 Все
-                    </a>
-                  </div>
-                  </div>
-              </div>
+
+  <!-- КНОПКА раскрытия -->
+  <button class="collapse-btn" id="collapseBtn" type="button" aria-expanded="false">
+    Фильтры ▾
+  </button>
+
+  <!-- ПАНЕЛЬ фильтров (по умолчанию свернута) -->
+  <div class="filters-wrap" id="filtersWrap" style="max-height:0; overflow:hidden; transition:max-height .25s ease;">
+    <div class="filters">
+      <!-- Группа: Тип -->
+      <div class="filter-group">
+        <a href="/?kind=all&store={{ store }}" class="filter-btn {% if kind == 'all' %}active{% endif %}">
+            Все
+        </a>
+        <a href="/?kind=keep&store={{ store }}" class="filter-btn {% if kind == 'keep' %}active{% endif %}">
+            🎁 Навсегда
+        </a>
+        <a href="/?kind=weekend&store={{ store }}" class="filter-btn {% if kind == 'weekend' %}active{% endif %}">
+            ⏱ Временно
+        </a>
+        <a href="/?kind=deals&store={{ store }}" class="filter-btn {% if kind == 'deals' %}active{% endif %}">
+            💸 Скидки
+        </a>
+        <a href="/?kind=free&store={{ store }}" class="filter-btn {% if kind == 'free' %}active{% endif %}">
+            🔥 F2P
+        </a>
+      </div>
+
+      <!-- Группа: Магазин -->
+      <div class="filter-group">
+        <a href="/?store=steam&kind={{ kind }}" class="filter-btn {% if store == 'steam' %}active{% endif %}">
+            🎮 Steam
+        </a>
+        <a href="/?store=epic&kind={{ kind }}" class="filter-btn {% if store == 'epic' %}active{% endif %}">
+            🟦 Epic
+        </a>
+        <a href="/?store=gog&kind={{ kind }}" class="filter-btn {% if store == 'gog' %}active{% endif %}">
+            🟪 GOG
+        </a>
+        <a href="/?store=prime&kind={{ kind }}" class="filter-btn {% if store == 'prime' %}active{% endif %}">
+            🟨 Prime
+        </a>
+        <a href="/?store=all&kind={{ kind }}" class="filter-btn {% if store == 'all' %}active{% endif %}">
+            📦 Все
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(() => {
+  const btn = document.getElementById('collapseBtn');
+  const wrap = document.getElementById('filtersWrap');
+  const KEY = 'freerg_filters_open';
+
+  function setOpen(isOpen) {
+    btn.setAttribute('aria-expanded', String(isOpen));
+    btn.textContent = isOpen ? 'Фильтры ▴' : 'Фильтры ▾';
+
+    if (isOpen) {
+      // раскрываем по реальной высоте контента
+      wrap.style.maxHeight = wrap.scrollHeight + 'px';
+    } else {
+      wrap.style.maxHeight = '0px';
+    }
+    try { localStorage.setItem(KEY, isOpen ? '1' : '0'); } catch(e) {}
+  }
+
+  // стартовое состояние: свернуто, но если в localStorage было открыто — откроем
+  let initialOpen = false;
+  try { initialOpen = localStorage.getItem(KEY) === '1'; } catch(e) {}
+
+  setOpen(initialOpen);
+
+  // если окно ресайзится и панель открыта — пересчитать maxHeight
+  window.addEventListener('resize', () => {
+    if (btn.getAttribute('aria-expanded') === 'true') {
+      wrap.style.maxHeight = wrap.scrollHeight + 'px';
+    }
+  });
+
+  btn.addEventListener('click', () => {
+    const isOpen = btn.getAttribute('aria-expanded') === 'true';
+    setOpen(!isOpen);
+  });
+})();
+</script>
         </div>
   </div>
     
