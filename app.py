@@ -1853,6 +1853,22 @@ PAGE = Template("""
             margin: 0 auto;
             padding: 16px 20px;
             text-align: center;
+            position: relative;
+        }
+                
+        /* мини-статистика уводим вправо */
+        .mini-stats{
+            position:absolute;
+            top:10px;
+            right:20px;
+
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+
+            text-align:right;
+            font-size:14px;
+            opacity:.9;
         }
         
         .brand {
@@ -2220,21 +2236,44 @@ PAGE = Template("""
         }
         
         /* 📱 АДАПТАЦИЯ ДЛЯ МОБИЛЬНЫХ */
-@media (max-width: 768px) {
-  .header-content { padding: 12px 16px; }
-  .brand h1 { font-size: 1.5rem; }
-  .brand p { font-size: 0.8rem; }
-  .filters { gap: 6px; }
-  .filter-group { flex-wrap: wrap; justify-content: center; }
-  .filter-btn { padding: 6px 12px; font-size: 0.8rem; }
-  .games-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .game-image-container { height: 110px; }
-  .game-content { padding: 12px; }
-  .game-title { font-size: 0.95rem; }
-  .section-title { font-size: 1.25rem; }
-  .container { padding: 16px 12px; }
-  .scroll-to-top { width: 45px; height: 45px; bottom: 20px; right: 20px; font-size: 1.3rem; }
-}
+        @media (max-width: 768px) {
+            .header-content { padding: 12px 16px; }
+            .brand h1 { font-size: 1.5rem; }
+            .brand p { font-size: 0.8rem; }
+            .filters { gap: 6px; }
+            .filter-group { flex-wrap: wrap; justify-content: center; }
+            .filter-btn { padding: 6px 12px; font-size: 0.8rem; }
+            .games-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .game-image-container { height: 110px; }
+            .game-content { padding: 12px; }
+            .game-title { font-size: 0.95rem; }
+            .section-title { font-size: 1.25rem; }
+            .container { padding: 16px 12px; }
+            .scroll-to-top { width: 45px; height: 45px; bottom: 20px; right: 20px; font-size: 1.3rem; }
+        }
+                
+        /* мини-статистика уводим вправо */
+        .mini-stats{
+            position:absolute;
+            top:10px;
+            right:20px;
+
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+
+            text-align:right;
+            font-size:14px;
+            opacity:.9;
+        }
+
+        .mini-stats{
+            background:rgba(255,255,255,.05);
+            padding:10px 14px;
+            border-radius:14px;
+            border:1px solid rgba(255,255,255,.08);
+            backdrop-filter:blur(6px);
+        }        
 
         
         /* 💻 БОЛЬШИЕ ЭКРАНЫ */
