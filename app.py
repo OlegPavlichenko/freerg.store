@@ -2535,7 +2535,7 @@ PAGE = Template("""
             <section data-tour="free">
                 <div class="section-header">
                 <span class="section-icon">🎁</span>
-                <h2 class="section-title">Бесплатно навсегда</h2>
+                <h2 class="section-title">Бесплатно навсегда / Keep to free</h2>
                 <span class="section-count">{{ keep|length }}</span>
             </div>
                 </section>
@@ -2662,7 +2662,7 @@ PAGE = Template("""
         <div class="section">
   <div class="section-header">
     <span class="section-icon">🎮</span>
-    <h2 class="section-title">Ищу напарников</h2>
+    <h2 class="section-title">Ищу напарников / Looking for teammate</h2>
     <span class="section-count">{{ lfg|length }}</span>
   </div>
     <div data-tour="lfg">
@@ -2705,7 +2705,7 @@ PAGE = Template("""
                 <section data-tour="hot">
   <div class="section-header">
     <span class="section-icon">💸</span>
-    <h2 class="section-title">Hot Deals 70%+</h2>
+    <h2 class="section-title">Горячие скидки / Hot Deals</h2>
     <span class="section-count">{{ hot|length }}</span>
   </div>
                 </section>
@@ -2794,7 +2794,7 @@ PAGE = Template("""
                 <section data-tour="f2p">
             <div class="section-header">
                 <span class="section-icon">🔥</span>
-                <h2 class="section-title">Бесплатные игры</h2>
+                <h2 class="section-title">Бесплатные игры / Free to Play</h2>
                 <span class="section-count">{{ free_games|length }}</span>
             </div>
                 </section>
