@@ -2420,14 +2420,15 @@ PAGE = Template("""
     <div class="header">
         <div class="header-content">
             <div class="brand">
-                <div class="mini-stats" data-tour="stats">
+                <section data-tour="stats">
+                <div class="mini-stats">
   <div class="mini-stat">💸 Сэкономили сегодня: <b>${{ "%.2f"|format(savings.saved_today) }}</b></div>
   <div class="mini-stat">📦 Клики сегодня: <b>{{ savings.clicks_today }}</b></div>
   <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>${{ "%.2f"|format(savings.saved_all) }}</b></div>
-</div>
+</div></section>
               <h1>🎮 Free Redeem Games Store</h1>
               <p>Актуальные бесплатные игры и скидки</p>
-                </div>
+                
                 
               <div class="header-divider">
 
