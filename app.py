@@ -2358,7 +2358,61 @@ PAGE = Template("""
 /* подсветка выбранного */
 .vote-btn.is-active.vote-up{ background:rgba(0,255,153,.12); border-color:rgba(0,255,153,.25); }
 .vote-btn.is-active.vote-down{ background:rgba(255,80,80,.12); border-color:rgba(255,80,80,.25); }
-                
+
+/* ===== TOUR (мини-экскурс) ===== */
+.tour-overlay{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.65);
+  z-index:9999;
+  display:none;
+}
+.tour-overlay.active{ display:block; }
+
+.tour-highlight{
+  position:relative;
+  z-index:10000;
+  border-radius:16px;
+  box-shadow:0 0 0 4px rgba(255,255,255,.15), 0 0 0 9999px rgba(0,0,0,.65);
+  transition: box-shadow .2s ease;
+}
+
+.tour-pop{
+  position:fixed;
+  z-index:10001;
+  max-width:320px;
+  background:#111827;
+  color:#e5e7eb;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:16px;
+  padding:12px 12px 10px;
+  box-shadow:0 12px 40px rgba(0,0,0,.45);
+  display:none;
+}
+.tour-pop.active{ display:block; }
+
+.tour-title{ font-weight:800; margin:0 0 6px; font-size:14px; }
+.tour-text{ margin:0 0 10px; font-size:13px; color:#cbd5e1; line-height:1.35; }
+
+.tour-actions{
+  display:flex; gap:8px; justify-content:space-between; align-items:center;
+}
+.tour-actions .left{ display:flex; gap:8px; }
+.tour-btn{
+  cursor:pointer;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.06);
+  color:#e5e7eb;
+  padding:7px 10px;
+  border-radius:12px;
+  font-size:13px;
+}
+.tour-btn.primary{
+  background:rgba(99,102,241,.25);
+  border-color:rgba(99,102,241,.45);
+}
+.tour-step{
+  font-size:12px; color:#94a3b8;
+}    
     </style>
 </head>
 <body>
@@ -2366,7 +2420,7 @@ PAGE = Template("""
     <div class="header">
         <div class="header-content">
             <div class="brand">
-                <div class="mini-stats">
+                <div class="mini-stats" data-tour="stats">
   <div class="mini-stat">💸 Сэкономили сегодня: <b>${{ "%.2f"|format(savings.saved_today) }}</b></div>
   <div class="mini-stat">📦 Клики сегодня: <b>{{ savings.clicks_today }}</b></div>
   <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>${{ "%.2f"|format(savings.saved_all) }}</b></div>
@@ -2381,10 +2435,12 @@ PAGE = Template("""
   <button class="collapse-btn" id="collapseBtn" type="button" aria-expanded="false">
     Фильтры ▾
   </button>
+                
+    <button class="tour-btn primary" id="tourStartBtn" type="button">✨ Экскурс</button>
 
   <!-- ПАНЕЛЬ фильтров (по умолчанию свернута) -->
   <div class="filters-wrap" id="filtersWrap" style="max-height:0; overflow:hidden; transition:max-height .25s ease;">
-    <div class="filters">
+    <div class="filters" data-tour="filters">
       <!-- Группа: Тип -->
       <div class="filter-group">
         <a href="/?kind=all&store={{ store }}" class="filter-btn {% if kind == 'all' %}active{% endif %}">
@@ -2476,11 +2532,13 @@ PAGE = Template("""
     <div class="container">
         {% if kind in ["all", "keep"] and keep|length > 0 %}
         <div class="section">
-            <div class="section-header">
+            <section data-tour="free">
+                <div class="section-header">
                 <span class="section-icon">🎁</span>
                 <h2 class="section-title">Бесплатно навсегда</h2>
                 <span class="section-count">{{ keep|length }}</span>
             </div>
+                </section>
             
             <div class="games-grid">
                 {% for game in keep %}
@@ -2607,13 +2665,14 @@ PAGE = Template("""
     <h2 class="section-title">Ищу напарников</h2>
     <span class="section-count">{{ lfg|length }}</span>
   </div>
-
+    <div data-tour="lfg">
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
     <button class="btn" onclick="openLfgModal()">Создать заявку →</button>
     {% if tg_group_url %}
-      <a class="btn" href="{{ tg_group_url }}" target="_blank">Перейти в Telegram группу</a>
+      <a data-tour="tg" class="btn" href="{{ tg_group_url }}" target="_blank">Перейти в Telegram группу</a>
     {% endif %}
   </div>
+    </div>
 
   {% if lfg|length == 0 %}
     <div class="muted" style="opacity:.85;">Пока нет заявок. Создай первую 🙂</div>
@@ -2641,11 +2700,13 @@ PAGE = Template("""
 
         {% if kind in ["all", "deals"] and hot|length > 0 %}
 <div class="section">
+                <section data-tour="hot">
   <div class="section-header">
     <span class="section-icon">💸</span>
     <h2 class="section-title">Hot Deals 70%+</h2>
     <span class="section-count">{{ hot|length }}</span>
   </div>
+                </section>
 
   <div class="games-grid">
     {% for game in hot %}
@@ -2728,11 +2789,13 @@ PAGE = Template("""
         
         {% if kind in ["all", "free"] and free_games is defined and free_games|length > 0 %}
         <div class="section">
+                <section data-tour="f2p">
             <div class="section-header">
                 <span class="section-icon">🔥</span>
                 <h2 class="section-title">Бесплатные игры</h2>
                 <span class="section-count">{{ free_games|length }}</span>
             </div>
+                </section>
                 
 <div id="lfgModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); padding:16px; z-index:9999;">
   <div style="max-width:520px; margin:40px auto; background:#111; border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:16px;">
@@ -2996,6 +3059,136 @@ if ("serviceWorker" in navigator) {
 }
 </script>
                 
+                <script>
+(function(){
+  const steps = [
+    { sel: '[data-tour="filters"]', title:"Фильтры", text:"Выбирай тип (навсегда/временно/скидки) и магазин (Steam/Epic…).", placement:"bottom" },
+    { sel: '[data-tour="free"]',    title:"🎁 Бесплатно навсегда", text:"Самое вкусное — забираешь и остаётся навсегда.", placement:"top" },
+    { sel: '[data-tour="f2p"]',     title:"⏱ Free-to-Play", text:"Free To Play / Бесплатные игры: доступ открыт всегда.", placement:"top" },
+    { sel: '[data-tour="hot"]',     title:"💸 Скидки", text:"Горячие скидки — иногда цена падает до копеек.", placement:"top" },
+    { sel: '[data-tour="lfg"]',     title:"Поиск тиммейтов", text:"Создай заявку и собирай пати — а дальше общение в TG.", placement:"bottom" },
+    { sel: '[data-tour="tg"]',      title:"Telegram-общение", text:"Тут обсуждения, поиск друзей и быстрый чат по играм.", placement:"bottom" },
+  ];
+
+  let i = -1;
+  let currentEl = null;
+
+  const overlay = document.createElement("div");
+  overlay.className = "tour-overlay";
+  document.body.appendChild(overlay);
+
+  const pop = document.createElement("div");
+  pop.className = "tour-pop";
+  pop.innerHTML = `
+    <div class="tour-step" id="tourStep"></div>
+    <h3 class="tour-title" id="tourTitle"></h3>
+    <p class="tour-text" id="tourText"></p>
+    <div class="tour-actions">
+      <div class="left">
+        <button class="tour-btn" id="tourPrev" type="button">Назад</button>
+        <button class="tour-btn primary" id="tourNext" type="button">Далее</button>
+      </div>
+      <button class="tour-btn" id="tourClose" type="button">Закрыть</button>
+    </div>
+  `;
+  document.body.appendChild(pop);
+
+  const $ = (id) => document.getElementById(id);
+
+  function cleanupHighlight(){
+    if(currentEl){
+      currentEl.classList.remove("tour-highlight");
+      currentEl = null;
+    }
+  }
+
+  function placePop(el, placement){
+    const r = el.getBoundingClientRect();
+    const pad = 10;
+
+    let left = Math.min(
+      Math.max(pad, r.left + r.width/2 - pop.offsetWidth/2),
+      window.innerWidth - pop.offsetWidth - pad
+    );
+
+    let top;
+    if(placement === "top"){
+      top = r.top - pop.offsetHeight - 12;
+      if(top < pad) top = r.bottom + 12;
+    } else {
+      top = r.bottom + 12;
+      if(top + pop.offsetHeight > window.innerHeight - pad) top = r.top - pop.offsetHeight - 12;
+    }
+
+    if(top < pad) top = pad;
+    if(top + pop.offsetHeight > window.innerHeight - pad) top = window.innerHeight - pop.offsetHeight - pad;
+
+    pop.style.left = left + "px";
+    pop.style.top = top + "px";
+  }
+
+  function showStep(nextIndex){
+    cleanupHighlight();
+    i = nextIndex;
+
+    const step = steps[i];
+    const el = document.querySelector(step.sel);
+
+    if(!el){
+      if(i < steps.length - 1) return showStep(i+1);
+      return endTour();
+    }
+
+    currentEl = el;
+    overlay.classList.add("active");
+    pop.classList.add("active");
+
+    el.scrollIntoView({ behavior:"smooth", block:"center" });
+
+    setTimeout(() => {
+      el.classList.add("tour-highlight");
+
+      $("tourStep").textContent = `Шаг ${i+1} из ${steps.length}`;
+      $("tourTitle").textContent = step.title;
+      $("tourText").textContent = step.text;
+
+      $("tourPrev").disabled = (i === 0);
+      $("tourNext").textContent = (i === steps.length - 1) ? "Готово" : "Далее";
+
+      placePop(el, step.placement || "bottom");
+    }, 250);
+  }
+
+  function endTour(){
+    overlay.classList.remove("active");
+    pop.classList.remove("active");
+    cleanupHighlight();
+    i = -1;
+  }
+
+  document.addEventListener("click", (e) => {
+    if(e.target && e.target.id === "tourStartBtn") showStep(0);
+    if(e.target && e.target.id === "tourClose") endTour();
+    if(e.target && e.target.id === "tourNext"){
+      if(i >= steps.length - 1) endTour();
+      else showStep(i+1);
+    }
+    if(e.target && e.target.id === "tourPrev"){
+      if(i > 0) showStep(i-1);
+    }
+  });
+
+  overlay.addEventListener("click", endTour);
+
+  window.addEventListener("resize", () => {
+    if(i >= 0 && currentEl) placePop(currentEl, steps[i].placement || "bottom");
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && i >= 0) endTour();
+  });
+})();
+</script>
 
 </body>
 </html>
