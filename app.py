@@ -2425,7 +2425,7 @@ PAGE = Template("""
   <div class="mini-stat">📦 Клики сегодня: <b>{{ savings.clicks_today }}</b></div>
   <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>${{ "%.2f"|format(savings.saved_all) }}</b></div>
 </div></div>
-              <h1>🎮 Free Redeem Games Store</h1>
+              <h1>🎮 FreeRG.store</h1>
               <p>Актуальные бесплатные игры и скидки</p>
                 
                 
