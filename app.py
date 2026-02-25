@@ -2420,12 +2420,11 @@ PAGE = Template("""
     <div class="header">
         <div class="header-content">
             <div class="brand">
-                <section data-tour="stats">
-                <div class="mini-stats">
+                <div class="mini-stats" data-tour="stats">
   <div class="mini-stat">💸 Сэкономили сегодня: <b>${{ "%.2f"|format(savings.saved_today) }}</b></div>
   <div class="mini-stat">📦 Клики сегодня: <b>{{ savings.clicks_today }}</b></div>
   <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>${{ "%.2f"|format(savings.saved_all) }}</b></div>
-</div></section>
+</div></div>
               <h1>🎮 Free Redeem Games Store</h1>
               <p>Актуальные бесплатные игры и скидки</p>
                 
@@ -2669,11 +2668,12 @@ PAGE = Template("""
     <div data-tour="lfg">
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
     <button class="btn" onclick="openLfgModal()">Создать заявку →</button>
-                </div>
+                
     {% if tg_group_url %}
       <a data-tour="tg" class="btn" href="{{ tg_group_url }}" target="_blank">Перейти в Telegram группу</a>
     {% endif %}
   </div>
+                </div>
     
 
   {% if lfg|length == 0 %}
