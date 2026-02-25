@@ -2436,7 +2436,7 @@ PAGE = Template("""
     Фильтры ▾
   </button>
                 
-    <button class="tour-btn primary" id="tourStartBtn" type="button">✨ Экскурс</button>
+    <button class="tour-btn primary" id="tourStartBtn" type="button">✨ Tutorial (Подсказка)</button>
 
   <!-- ПАНЕЛЬ фильтров (по умолчанию свернута) -->
   <div class="filters-wrap" id="filtersWrap" style="max-height:0; overflow:hidden; transition:max-height .25s ease;">
