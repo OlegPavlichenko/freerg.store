@@ -2668,11 +2668,12 @@ PAGE = Template("""
     <div data-tour="lfg">
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
     <button class="btn" onclick="openLfgModal()">Создать заявку →</button>
+                </div>
     {% if tg_group_url %}
       <a data-tour="tg" class="btn" href="{{ tg_group_url }}" target="_blank">Перейти в Telegram группу</a>
     {% endif %}
   </div>
-    </div>
+    
 
   {% if lfg|length == 0 %}
     <div class="muted" style="opacity:.85;">Пока нет заявок. Создай первую 🙂</div>
@@ -3062,6 +3063,7 @@ if ("serviceWorker" in navigator) {
                 <script>
 (function(){
   const steps = [
+    { sel: '[data-tour="stats"]',   title:"Мини-статистика", text:"Здесь видно, сколько кликов и сколько сэкономили — живые цифры.", placement:"bottom" },
     { sel: '[data-tour="filters"]', title:"Фильтры", text:"Выбирай тип (навсегда/временно/скидки) и магазин (Steam/Epic…).", placement:"bottom" },
     { sel: '[data-tour="free"]',    title:"🎁 Бесплатно навсегда", text:"Самое вкусное — забираешь и остаётся навсегда.", placement:"top" },
     { sel: '[data-tour="f2p"]',     title:"⏱ Free-to-Play", text:"Free To Play / Бесплатные игры: доступ открыт всегда.", placement:"top" },
