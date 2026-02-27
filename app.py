@@ -1844,6 +1844,9 @@ PAGE = Template("""
             transition: transform .22s ease; will-change: transform;
         }
                 
+        .t-mobile{ display:none; }
+        .t-desktop{ display:inline; }
+                
         .header.hidden {
             transform: translateY(-100%);
         }
@@ -2250,6 +2253,8 @@ PAGE = Template("""
             .section-title { font-size: 1.25rem; }
             .container { padding: 16px 12px; }
             .scroll-to-top { width: 45px; height: 45px; bottom: 20px; right: 20px; font-size: 1.3rem; }
+            .t-mobile{ display:inline; }
+            .t-desktop{ display:none; }
         }
                 
        .header-content{
@@ -2535,7 +2540,10 @@ PAGE = Template("""
             <section data-tour="free">
                 <div class="section-header">
                 <span class="section-icon">🎁</span>
-                <h2 class="section-title">Бесплатно навсегда / Keep to free</h2>
+                <h2 class="section-title">
+                <span class="t-desktop">Бесплатно навсегда • Free to keep</span>
+                <span class="t-mobile">Забрать навсегда • Free</span>
+                </h2>
                 <span class="section-count">{{ keep|length }}</span>
             </div>
                 </section>
@@ -2662,7 +2670,10 @@ PAGE = Template("""
         <div class="section">
   <div class="section-header">
     <span class="section-icon">🎮</span>
-    <h2 class="section-title">Ищу напарников / Looking for teammate</h2>
+                <h2 class="section-title">
+                <span class="t-desktop">Поиск напарников • Looking for teammate</span>
+                <span class="t-mobile">Поиск напарника • Player for CORP</span>
+                </h2>
     <span class="section-count">{{ lfg|length }}</span>
   </div>
     <div data-tour="lfg">
@@ -2705,7 +2716,10 @@ PAGE = Template("""
                 <section data-tour="hot">
   <div class="section-header">
     <span class="section-icon">💸</span>
-    <h2 class="section-title">Горячие скидки / Hot Deals</h2>
+                <h2 class="section-title">
+                <span class="t-desktop">Горячие скидки • Hot Sale</span>
+                <span class="t-mobile">Горячие скидки • Hot Sale</span>
+                </h2>                
     <span class="section-count">{{ hot|length }}</span>
   </div>
                 </section>
@@ -2795,6 +2809,10 @@ PAGE = Template("""
             <div class="section-header">
                 <span class="section-icon">🔥</span>
                 <h2 class="section-title">Бесплатные игры / Free to Play</h2>
+                <h2 class="section-title">
+                <span class="t-desktop">Бесплатные игры • Free to Play</span>
+                <span class="t-mobile">Бесплатные игры • F2P</span>
+                </h2>                
                 <span class="section-count">{{ free_games|length }}</span>
             </div>
                 </section>
