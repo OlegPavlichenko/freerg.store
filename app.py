@@ -2808,7 +2808,6 @@ PAGE = Template("""
                 <section data-tour="f2p">
             <div class="section-header">
                 <span class="section-icon">🔥</span>
-                <h2 class="section-title">Бесплатные игры / Free to Play</h2>
                 <h2 class="section-title">
                 <span class="t-desktop">Бесплатные игры • Free to Play</span>
                 <span class="t-mobile">Бесплатные игры • F2P</span>
