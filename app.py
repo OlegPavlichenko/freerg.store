@@ -2672,7 +2672,7 @@ PAGE = Template("""
     <span class="section-icon">🎮</span>
                 <h2 class="section-title">
                 <span class="t-desktop">Поиск напарников • Looking for teammate</span>
-                <span class="t-mobile">Поиск напарника • Player for CORP</span>
+                <span class="t-mobile">Поиск напарника • LFP</span>
                 </h2>
     <span class="section-count">{{ lfg|length }}</span>
   </div>
