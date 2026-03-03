@@ -2868,51 +2868,7 @@ PAGE = Template("""
         </div>
         {% endif %}
                 
-
-        <div class="section">
-  <div class="section-header">
-    <span class="section-icon">🎮</span>
-                <h2 class="section-title">
-                <span class="t-desktop">Поиск напарников • Looking for teammate</span>
-                <span class="t-mobile">Поиск напарника • LFP</span>
-                </h2>
-    <span class="section-count">{{ lfg|length }}</span>
-  </div>
-    <div data-tour="lfg">
-  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
-    <button class="btn" onclick="openLfgModal()">Создать заявку →</button>
-                
-    {% if tg_group_url %}
-      <a data-tour="tg" class="btn" href="{{ tg_group_url }}" target="_blank">Перейти в Telegram группу</a>
-    {% endif %}
-  </div>
-                </div>
-    
-
-  {% if lfg|length == 0 %}
-    <div class="muted" style="opacity:.85;">Пока нет заявок. Создай первую 🙂</div>
-  {% else %}
-    <div class="games-grid">
-      {% for p in lfg %}
-      <div class="game-card">
-        <div class="game-content">
-          <h3 class="game-title">{{ p.game }}</h3>
-          <div class="game-meta" style="flex-wrap:wrap;">
-            {% if p.region %}<span class="meta-tag">🌍 {{ p.region }}</span>{% endif %}
-            {% if p.platform %}<span class="meta-tag">🕹 {{ p.platform }}</span>{% endif %}
-          </div>
-          {% if p.note %}
-            <div style="opacity:.9; margin:8px 0;">{{ p.note }}</div>
-          {% endif %}
-          <a class="btn" href="{{ p.tg_url }}" target="_blank">💬 Написать в TG</a>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-</div>
-                
-{% if manual and manual|length %}
+        {% if manual and manual|length %}
 <section class="section">
   <div class="section-head"><section data-tour="exclusive">
     <h2 class="section-title">✨ Эксклюзивы / Manual picks</h2></section>
@@ -2957,6 +2913,52 @@ PAGE = Template("""
   </div>
 </section>
 {% endif %}
+
+                
+
+        <div class="section">
+  <div class="section-header">
+    <span class="section-icon">🎮</span>
+                <h2 class="section-title">
+                <span class="t-desktop">Поиск напарников • Looking for teammate</span>
+                <span class="t-mobile">Поиск напарника • LFP</span>
+                </h2>
+    <span class="section-count">{{ lfg|length }}</span>
+  </div>
+    <div data-tour="lfg">
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+    <button class="btn" onclick="openLfgModal()">Создать заявку →</button>
+                
+    {% if tg_group_url %}
+      <a data-tour="tg" class="btn" href="{{ tg_group_url }}" target="_blank">Перейти в Telegram группу</a>
+    {% endif %}
+  </div>
+                </div>
+    
+
+  {% if lfg|length == 0 %}
+    <div class="muted" style="opacity:.85;">Пока нет заявок. Создай первую 🙂</div>
+  {% else %}
+    <div class="games-grid">
+      {% for p in lfg %}
+      <div class="game-card">
+        <div class="game-content">
+          <h3 class="game-title">{{ p.game }}</h3>
+          <div class="game-meta" style="flex-wrap:wrap;">
+            {% if p.region %}<span class="meta-tag">🌍 {{ p.region }}</span>{% endif %}
+            {% if p.platform %}<span class="meta-tag">🕹 {{ p.platform }}</span>{% endif %}
+          </div>
+          {% if p.note %}
+            <div style="opacity:.9; margin:8px 0;">{{ p.note }}</div>
+          {% endif %}
+          <a class="btn" href="{{ p.tg_url }}" target="_blank">💬 Написать в TG</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+                
                 
 
         {% if kind in ["all", "deals"] and hot|length > 0 %}
