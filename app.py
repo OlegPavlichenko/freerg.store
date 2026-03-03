@@ -2868,52 +2868,7 @@ PAGE = Template("""
         </div>
         {% endif %}
                 
-        {% if manual and manual|length %}
-<section class="section">
-  <div class="section-head"><section data-tour="exclusive">
-    <h2 class="section-title">✨ Эксклюзивы / Manual picks</h2></section>
-    <div class="section-sub">Ручные находки — то, что легко пропустить</div>
-  </div>
-
-  <div class="grid">
-    {% for it in manual %}
-      <article class="card exclusive">
-        <a class="card-link" href="{{ it.go }}" target="_blank" rel="nofollow">
-          <div class="card-img">
-            <img src="{{ it.image }}" alt="">
-            <div class="pill exclusive-pill">EXCLUSIVE</div>
-            <div class="badge">{{ it.badge|safe }}</div>
-          </div>
-
-          <div class="card-body">
-            <div class="card-title">{{ it.title }}</div>
-
-            <div class="card-meta">
-              {% if it.price_old is not none or it.price_new is not none %}
-                <span class="price">
-                  {% if it.price_old is not none and it.price_new is not none and it.price_new < it.price_old %}
-                    <s>{{ "%.2f"|format(it.price_old) }} {{ it.currency }}</s>
-                    <b>{{ "%.2f"|format(it.price_new) }} {{ it.currency }}</b>
-                  {% elif it.price_new is not none %}
-                    <b>{{ "%.2f"|format(it.price_new) }} {{ it.currency }}</b>
-                  {% else %}
-                    <b>{{ "%.2f"|format(it.price_old) }} {{ it.currency }}</b>
-                  {% endif %}
-                </span>
-              {% endif %}
-
-              {% if it.ends_at_fmt %}
-                <span class="ends">⏳ {{ it.ends_at_fmt }}</span>
-              {% endif %}
-            </div>
-          </div>
-        </a>
-      </article>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
-
+        
                 
 
         <div class="section">
