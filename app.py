@@ -2230,19 +2230,7 @@ PAGE = Template("""
             box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
         }
         
-        .section { margin-top: 18px; }
-        .section-head { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin: 10px 0 10px; }
-        .section-title { margin:0; font-size:18px; font-weight:900; }
-        .section-sub { opacity:.75; font-size:12px; }
-
-        .card.exclusive { border:1px solid rgba(255,255,255,.16); }
-        .exclusive-pill{
-            position:absolute; top:10px; left:10px;
-            padding:6px 10px; border-radius:999px;
-            background:rgba(99,102,241,.18);
-            border:1px solid rgba(99,102,241,.35);
-            font-weight:800; font-size:12px;
-        }        
+        
         
         /* Бейдж магазина */
         .store-badge {
@@ -2332,6 +2320,20 @@ PAGE = Template("""
             overflow: hidden;
             min-height: 2.6em;
         }
+                
+        .section { margin-top: 18px; }
+        .section-head { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin: 10px 0 10px; }
+        .section-title { margin:0; font-size:18px; font-weight:900; }
+        .section-sub { opacity:.75; font-size:12px; }
+
+        .card.exclusive { border:1px solid rgba(255,255,255,.16); }
+        .exclusive-pill{
+            position:absolute; top:10px; left:10px;
+            padding:6px 10px; border-radius:999px;
+            background:rgba(99,102,241,.18);
+            border:1px solid rgba(99,102,241,.35);
+            font-weight:800; font-size:12px;
+        }        
         
         /* Теги */
         .game-meta {
