@@ -261,6 +261,25 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
     );
     """)
 
+    # Ручное добавление новостей (эксклюзив) manual_news
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS manual_news (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT,
+        title TEXT,
+        url TEXT,
+        image_url TEXT,
+        store TEXT,
+        kind TEXT,
+        price_old REAL,
+        price_new REAL,
+        currency TEXT,
+        ends_at TEXT,
+        is_published INTEGER DEFAULT 1
+    );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_manual_news_created ON manual_news(created_at);")
+
     conn.commit()
 
 import sqlite3
@@ -1527,6 +1546,162 @@ def epic_pick_working_url(cands: list[str]) -> str:
     print(f"  ⚠️ All URLs failed, using first: {cands[0] if cands else 'none'}")
     return cands[0] if cands else "https://store.epicgames.com/free-games"
 
+# --------------------
+# manual_news
+# --------------------
+
+import re
+import requests
+from datetime import datetime
+from html import unescape
+
+ADMIN_KEY = os.getenv("ADMIN_KEY", "")
+
+def fetch_og(url: str) -> dict:
+    """
+    Достаём og:title / og:image с любой страницы.
+    Работает для большинства магазинов/страниц.
+    """
+    try:
+        r = requests.get(url, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; FreeRGbot/1.0; +https://freerg.store)"
+        })
+        html = r.text
+
+        def pick(pattern):
+            m = re.search(pattern, html, re.IGNORECASE)
+            return unescape(m.group(1)).strip() if m else None
+
+        og_title = pick(r'property=["\']og:title["\']\s+content=["\']([^"\']+)')
+        og_image = pick(r'property=["\']og:image["\']\s+content=["\']([^"\']+)')
+        title_tag = pick(r"<title[^>]*>(.*?)</title>")
+
+        return {
+            "title": og_title or title_tag,
+            "image": og_image
+        }
+    except Exception:
+        return {"title": None, "image": None}
+
+from fastapi import Form
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+ADD_NEWS_PAGE = Template("""
+<!doctype html><html><head>
+<meta charset="utf-8"/>
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Add news</title>
+<style>
+ body{font-family:system-ui;background:#0a0e1a;color:#e2e8f0;padding:24px}
+ .card{max-width:720px;margin:0 auto;background:#11162a;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:16px}
+ input,select{width:100%;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:#0b1022;color:#e2e8f0;margin:6px 0}
+ button{padding:10px 14px;border-radius:12px;border:0;background:#4f46e5;color:white;font-weight:700;cursor:pointer}
+ .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+ .muted{opacity:.75;font-size:13px}
+</style>
+</head><body>
+<div class="card">
+  <h2 style="margin:0 0 8px">Добавить эксклюзив</h2>
+  <div class="muted">Вставь ссылку — подтянем title + картинку. Цена: можно вручную или Steam auto.</div>
+  <form method="post" action="/admin/news/add?key={{ key }}">
+    <label>URL</label>
+    <input name="url" required placeholder="https://...">
+    <div class="row">
+      <div>
+        <label>Store</label>
+        <select name="store">
+          <option value="steam">steam</option>
+          <option value="epic">epic</option>
+          <option value="gog">gog</option>
+          <option value="prime">prime</option>
+          <option value="other" selected>other</option>
+        </select>
+      </div>
+      <div>
+        <label>Kind</label>
+        <select name="kind">
+          <option value="free_to_keep">free_to_keep</option>
+          <option value="hot_deal">hot_deal</option>
+          <option value="free_weekend">free_weekend</option>
+          <option value="news" selected>news</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Title (если оставить пустым — возьмём с сайта)</label>
+    <input name="title" placeholder="необязательно">
+
+    <div class="row">
+      <div>
+        <label>Old price</label>
+        <input name="price_old" placeholder="например 59.99">
+      </div>
+      <div>
+        <label>New price</label>
+        <input name="price_new" placeholder="например 0">
+      </div>
+    </div>
+
+    <label>Currency</label>
+    <input name="currency" placeholder="USD" value="USD">
+
+    <label>Ends at (опционально, ISO или просто текст)</label>
+    <input name="ends_at" placeholder="2026-03-01 23:59">
+
+    <button type="submit">Добавить</button>
+  </form>
+</div>
+</body></html>
+""")
+
+@app.get("/admin/news", response_class=HTMLResponse)
+def admin_news(key: str):
+    if key != ADMIN_KEY:
+        return HTMLResponse("Forbidden", status_code=403)
+    return ADD_NEWS_PAGE.render(key=key)
+
+@app.post("/admin/news/add")
+def admin_news_add(
+    key: str,
+    url: str = Form(...),
+    store: str = Form("other"),
+    kind: str = Form("news"),
+    title: str = Form(""),
+    price_old: str = Form(""),
+    price_new: str = Form(""),
+    currency: str = Form("USD"),
+    ends_at: str = Form(""),
+):
+    if key != ADMIN_KEY:
+        return HTMLResponse("Forbidden", status_code=403)
+
+    meta = fetch_og(url)
+    final_title = title.strip() or meta.get("title") or "(no title)"
+    image = meta.get("image") or ""
+
+    old_val = float(price_old) if price_old.strip() else None
+    new_val = float(price_new) if price_new.strip() else None
+
+    # Steam auto-price если user не указал цену
+    if store == "steam" and (old_val is None and new_val is None):
+        sp = steam_price_by_url(url)
+        if sp:
+            old_val, new_val, currency = sp
+
+    conn = db()
+    conn.execute("""
+        INSERT INTO manual_news (created_at, title, url, image_url, store, kind, price_old, price_new, currency, ends_at, is_published)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    """, (
+        datetime.utcnow().isoformat(),
+        final_title, url, image, store, kind,
+        old_val, new_val, currency, (ends_at.strip() or None)
+    ))
+    conn.commit()
+    conn.close()
+
+    return RedirectResponse(url=f"/admin/news?key={key}", status_code=302)
 
 # --------------------
 # SAVE + POST
@@ -1714,6 +1889,17 @@ async def post_unposted_to_telegram(limit: int = POST_LIMIT, store: str | None =
         except Exception as e:
             print("TG SEND ERROR:", e)
             break
+    
+    manual = conn.execute("""
+        SELECT
+            'm_' || id as id,
+            store, kind, title, url, image_url, ends_at,
+            price_old, price_new, currency
+        FROM manual_news
+        WHERE is_published=1
+        ORDER BY datetime(created_at) DESC
+        LIMIT 20
+    """).fetchall()
 
     conn.close()
     return {"posted": posted_count, "queued": queued, "store": store or "all"}
