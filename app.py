@@ -2737,7 +2737,7 @@ PAGE = Template("""
     </button>
     
     <div class="container">
-        {% if kind in ["all", "keep"] and keep|length > 0 %}
+        {% if kind in ["all", "keep"] %}
         <div class="section">
             <section data-tour="free">
                 <div class="section-header">
@@ -2750,7 +2750,7 @@ PAGE = Template("""
             </div>
                 </section>
             
-            <div class="games-grid">
+            {% if keep|length == 0 %}<div class="muted empty">Пока пусто — обновление скоро.</div>{% endif %}<div class="games-grid">
                 {% for game in keep %}
                 <div class="game-card">
                     <div class="game-image-container">
@@ -2803,7 +2803,7 @@ PAGE = Template("""
         </div>
         {% endif %}
         
-        {% if kind in ["all", "weekend"] and weekend|length > 0 %}
+        {% if kind in ["all", "weekend"] %}
         <div class="section">
             <div class="section-header">
                 <span class="section-icon">⏱</span>
@@ -2811,7 +2811,7 @@ PAGE = Template("""
                 <span class="section-count">{{ weekend|length }}</span>
             </div>
             
-            <div class="games-grid">
+            {% if weekend|length == 0 %}<div class="muted empty">Пока пусто — обновление скоро.</div>{% endif %}<div class="games-grid">
                 {% for game in weekend %}
                 <div class="game-card">
                     <div class="game-image-container">
@@ -2868,8 +2868,6 @@ PAGE = Template("""
         </div>
         {% endif %}
                 
-        
-                
 
         <div class="section">
   <div class="section-header">
@@ -2914,9 +2912,54 @@ PAGE = Template("""
   {% endif %}
 </div>
                 
+{% if manual and manual|length %}
+<section class="section">
+  <div class="section-head"><section data-tour="exclusive">
+    <h2 class="section-title">✨ Эксклюзивы / Manual picks</h2></section>
+    <div class="section-sub">Ручные находки — то, что легко пропустить</div>
+  </div>
+
+  <div class="grid">
+    {% for it in manual %}
+      <article class="card exclusive">
+        <a class="card-link" href="{{ it.go }}" target="_blank" rel="nofollow">
+          <div class="card-img">
+            <img src="{{ it.image }}" alt="">
+            <div class="pill exclusive-pill">EXCLUSIVE</div>
+            <div class="badge">{{ it.badge|safe }}</div>
+          </div>
+
+          <div class="card-body">
+            <div class="card-title">{{ it.title }}</div>
+
+            <div class="card-meta">
+              {% if it.price_old is not none or it.price_new is not none %}
+                <span class="price">
+                  {% if it.price_old is not none and it.price_new is not none and it.price_new < it.price_old %}
+                    <s>{{ "%.2f"|format(it.price_old) }} {{ it.currency }}</s>
+                    <b>{{ "%.2f"|format(it.price_new) }} {{ it.currency }}</b>
+                  {% elif it.price_new is not none %}
+                    <b>{{ "%.2f"|format(it.price_new) }} {{ it.currency }}</b>
+                  {% else %}
+                    <b>{{ "%.2f"|format(it.price_old) }} {{ it.currency }}</b>
+                  {% endif %}
+                </span>
+              {% endif %}
+
+              {% if it.ends_at_fmt %}
+                <span class="ends">⏳ {{ it.ends_at_fmt }}</span>
+              {% endif %}
+            </div>
+          </div>
+        </a>
+      </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
                 
 
-        {% if kind in ["all", "deals"] and hot|length > 0 %}
+        {% if kind in ["all", "deals"] %}
 <div class="section">
                 <section data-tour="hot">
   <div class="section-header">
@@ -2929,7 +2972,7 @@ PAGE = Template("""
   </div>
                 </section>
 
-  <div class="games-grid">
+  {% if hot|length == 0 %}<div class="muted empty">Пока пусто — обновление скоро.</div>{% endif %}<div class="games-grid">
     {% for game in hot %}
     <div class="game-card">
       <div class="game-image-container">
@@ -3008,7 +3051,7 @@ PAGE = Template("""
 </div>
 {% endif %}
         
-        {% if kind in ["all", "free"] and free_games is defined and free_games|length > 0 %}
+        {% if kind in ["all", "free"] %}
         <div class="section">
                 <section data-tour="f2p">
             <div class="section-header">
@@ -3020,7 +3063,31 @@ PAGE = Template("""
                 <span class="section-count">{{ free_games|length }}</span>
             </div>
                 </section>
-                
+
+                {% if free_games is not defined or free_games|length == 0 %}
+                  <div class="muted empty">Пока пусто — обновление скоро.</div>
+                {% else %}
+                  <div class="games-grid">
+                    {% for game in free_games %}
+                      <div class="game-card">
+                        <div class="game-image">
+                          <img src="{{ game.image }}" alt="{{ game.title }}">
+                          <div class="game-badge {{ game.store }}">{{ game.badge }}</div>
+                        </div>
+                        <div class="game-content">
+                          <div class="game-title">{{ game.title }}</div>
+                          <div class="game-meta">
+                            <div class="game-time">🆓 Free to Play</div>
+                          </div>
+                          <a href="{{ game.go_url }}" class="btn" target="_blank">Играть →</a>
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </div>
+            
+
 <div id="lfgModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); padding:16px; z-index:9999;">
   <div style="max-width:520px; margin:40px auto; background:#111; border:1px solid rgba(255,255,255,.12); border-radius:16px; padding:16px;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
