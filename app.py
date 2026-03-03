@@ -2230,6 +2230,20 @@ PAGE = Template("""
             box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
         }
         
+        .section { margin-top: 18px; }
+        .section-head { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin: 10px 0 10px; }
+        .section-title { margin:0; font-size:18px; font-weight:900; }
+        .section-sub { opacity:.75; font-size:12px; }
+
+        .card.exclusive { border:1px solid rgba(255,255,255,.16); }
+        .exclusive-pill{
+            position:absolute; top:10px; left:10px;
+            padding:6px 10px; border-radius:999px;
+            background:rgba(99,102,241,.18);
+            border:1px solid rgba(99,102,241,.35);
+            font-weight:800; font-size:12px;
+        }        
+        
         /* Бейдж магазина */
         .store-badge {
             position: absolute;
@@ -2896,6 +2910,52 @@ PAGE = Template("""
   {% endif %}
 </div>
                 
+{% if manual and manual|length %}
+<section class="section">
+  <div class="section-head"><section data-tour="exclusive">
+    <h2 class="section-title">✨ Эксклюзивы / Manual picks</h2></section>
+    <div class="section-sub">Ручные находки — то, что легко пропустить</div>
+  </div>
+
+  <div class="grid">
+    {% for it in manual %}
+      <article class="card exclusive">
+        <a class="card-link" href="{{ it.go }}" target="_blank" rel="nofollow">
+          <div class="card-img">
+            <img src="{{ it.image }}" alt="">
+            <div class="pill exclusive-pill">EXCLUSIVE</div>
+            <div class="badge">{{ it.badge|safe }}</div>
+          </div>
+
+          <div class="card-body">
+            <div class="card-title">{{ it.title }}</div>
+
+            <div class="card-meta">
+              {% if it.price_old is not none or it.price_new is not none %}
+                <span class="price">
+                  {% if it.price_old is not none and it.price_new is not none and it.price_new < it.price_old %}
+                    <s>{{ "%.2f"|format(it.price_old) }} {{ it.currency }}</s>
+                    <b>{{ "%.2f"|format(it.price_new) }} {{ it.currency }}</b>
+                  {% elif it.price_new is not none %}
+                    <b>{{ "%.2f"|format(it.price_new) }} {{ it.currency }}</b>
+                  {% else %}
+                    <b>{{ "%.2f"|format(it.price_old) }} {{ it.currency }}</b>
+                  {% endif %}
+                </span>
+              {% endif %}
+
+              {% if it.ends_at_fmt %}
+                <span class="ends">⏳ {{ it.ends_at_fmt }}</span>
+              {% endif %}
+            </div>
+          </div>
+        </a>
+      </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+                
 
         {% if kind in ["all", "deals"] and hot|length > 0 %}
 <div class="section">
@@ -3269,10 +3329,11 @@ if ("serviceWorker" in navigator) {
   const steps = [
     { sel: '[data-tour="stats"]',   title:"Мини-статистика", text:"Здесь видно, сколько кликов и сколько сэкономили — живые цифры.", placement:"bottom" },
     { sel: '[data-tour="filters"]', title:"Фильтры", text:"Выбирай тип (навсегда/временно/скидки) и магазин (Steam/Epic…).", placement:"bottom" },
+    { sel: '[data-tour="exclusive"]',     title:"💎 EXCLUSEVE", text:"Самое сладкое — то, что легко пропустить", placement:"bottom" },
     { sel: '[data-tour="free"]',    title:"🎁 Бесплатно навсегда", text:"Самое вкусное — забираешь и остаётся навсегда.", placement:"top" },
     { sel: '[data-tour="f2p"]',     title:"⏱ Free-to-Play", text:"Free To Play / Бесплатные игры: доступ открыт всегда.", placement:"top" },
     { sel: '[data-tour="hot"]',     title:"💸 Скидки", text:"Горячие скидки — иногда цена падает до копеек.", placement:"top" },
-    { sel: '[data-tour="lfg"]',     title:"Поиск тиммейтов", text:"Создай заявку и собирай пати — а дальше общение в TG.", placement:"bottom" },
+    { sel: '[data-tour="lfg"]',     title:"🔍️ Поиск тиммейтов", text:"Создай заявку и собирай пати — а дальше общение в TG.", placement:"bottom" },
     { sel: '[data-tour="tg"]',      title:"Telegram-общение", text:"Тут обсуждения, поиск друзей и быстрый чат по играм.", placement:"bottom" },
   ];
 
@@ -3707,7 +3768,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
         })
     
-    lfg_rows = conn.execute("""
+        lfg_rows = conn.execute("""
         SELECT id, created_at, game, region, platform, note, tg, expires_at
         FROM lfg
         WHERE active=1
@@ -3715,6 +3776,38 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         ORDER BY created_at DESC
         LIMIT 12
     """, (datetime.utcnow().isoformat(),)).fetchall()
+
+    manual_rows = conn.execute("""
+        SELECT id, created_at, title, url, image_url, store, kind,
+                price_old, price_new, currency, ends_at
+        FROM manual_news
+        WHERE is_published=1
+        ORDER BY datetime(created_at) DESC
+        LIMIT 12
+    """).fetchall()
+
+    manual_items = []
+    for (mid, created_at, title, url, image_url, store, kind, po, pn, cur, ends_at) in manual_rows:
+        store_norm = (store or "").strip().lower()
+        badge = store_badge(store_norm)
+
+        img_main, _ = images_for_row(store_norm, url, image_url)
+
+        manual_items.append({
+            "id": f"m_{mid}",
+            "title": title,
+            "url": url,
+            "image": img_main,
+            "badge": badge,
+            "store": store_norm,
+            "kind": kind or "news",
+            "price_old": po,
+            "price_new": pn,
+            "currency": cur or "USD",
+            "ends_at_fmt": (format_expiry(ends_at) if ends_at else ""),
+            # чтобы клики тоже трекались (src=manual)
+            "go": f"/go_manual/{mid}?src=manual",
+        })
 
     conn.close()
 
@@ -3780,6 +3873,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
         lfg=lfg,
         tg_group_url=TG_GROUP_URL,
         savings=stats,
+        manual=manual_items,
     )
 
 from fastapi import Form, Request
@@ -3868,6 +3962,24 @@ def lfg(request: Request, game: str = "general"):
     html += "</body></html>"
     return HTMLResponse(html)
 
+@app.get("/go_manual/{mid}")
+def go_manual(mid: int, request: Request):
+    conn = db()
+
+    src = request.query_params.get("src") or "manual"
+    utm_campaign = request.query_params.get("utm_campaign")
+    utm_content = request.query_params.get("utm_content")
+
+    # deal_id сделаем строкой "m_<id>" — это нормально для clicks.deal_id TEXT
+    log_click(conn, f"m_{mid}", request, src=src, utm_campaign=utm_campaign, utm_content=utm_content)
+
+    row = conn.execute("SELECT url FROM manual_news WHERE id=? LIMIT 1", (mid,)).fetchone()
+    conn.close()
+
+    if not row:
+        return RedirectResponse(url="/", status_code=302)
+
+    return RedirectResponse(url=row[0], status_code=302)
 
 @app.get("/lfg/new", response_class=HTMLResponse)
 def lfg_new(game: str = "general"):
