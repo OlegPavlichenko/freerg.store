@@ -175,6 +175,12 @@ def db():
     ensure_lfg_columns(conn)   # колонки
     ensure_lfg_indexes(conn)   # индексы
 
+    # Создаем папку, если её нет (на всякий случай)
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    # ВОТ ЭТА СТРОКА ОЖИВИТ КЛИКИ И LFG:
+    conn.row_factory = sqlite3.Row
+
     return conn
 
 def ensure_tables(conn: sqlite3.Connection) -> None:
@@ -3612,301 +3618,106 @@ def images_for_row(row_store: str | None, url: str, image_url: str | None):
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     conn = db()
-
-    # нормализуем параметры
-    store = (store or "all").strip().lower()
-    if store not in {"all", "steam", "epic", "gog", "prime"}:
-        store = "all"
-
-    kind = (kind or "all").strip().lower()
-    if kind not in {"all", "keep", "weekend", "free", "deals"}:
-        kind = "all"
-
-    keep_rows = conn.execute("""
-        SELECT id,store,title,url,image_url,ends_at,created_at
-        FROM deals
-        WHERE kind='free_to_keep'
-        ORDER BY created_at DESC
-        LIMIT 150
-    """).fetchall()
-
-    weekend_rows = conn.execute("""
-        SELECT id,store,title,url,image_url,ends_at,created_at
-        FROM deals
-        WHERE kind='free_weekend'
-        ORDER BY created_at DESC
-        LIMIT 150
-    """).fetchall()
-
-    # ---- HOT DEALS VITRINA (железобетонно 30/70 + фоллбеки) ----
-    HOT_TOTAL = 20
-    HOT_90 = 6                       # 30% от 20
-    HOT_70_89 = HOT_TOTAL - HOT_90   # 14
-
-    hot_rows = []
-
-    # 1) 90%+
-    hot_rows += conn.execute("""
-        SELECT id, store, title, url, image_url, ends_at, created_at,
-               discount_pct, price_old, price_new, currency
-        FROM deals
-        WHERE kind='hot_deal' AND discount_pct >= 90
-        ORDER BY RANDOM()
-        LIMIT ?
-    """, (HOT_90,)).fetchall()
-
-    # 2) 70–89
-    hot_rows += conn.execute("""
-        SELECT id, store, title, url, image_url, ends_at, created_at,
-               discount_pct, price_old, price_new, currency
-        FROM deals
-        WHERE kind='hot_deal' AND discount_pct BETWEEN 70 AND 89
-        ORDER BY RANDOM()
-        LIMIT ?
-    """, (HOT_70_89,)).fetchall()
-
-    # 3) если мало — расширяем до 70–94
-    if len(hot_rows) < HOT_TOTAL:
-        need = HOT_TOTAL - len(hot_rows)
-        hot_rows += conn.execute("""
-            SELECT id, store, title, url, image_url, ends_at, created_at,
-                   discount_pct, price_old, price_new, currency
-            FROM deals
-            WHERE kind='hot_deal' AND discount_pct BETWEEN 70 AND 94
-            ORDER BY RANDOM()
-            LIMIT ?
-        """, (need,)).fetchall()
-
-    # 4) если всё ещё мало — добиваем >=70
-    if len(hot_rows) < HOT_TOTAL:
-        need = HOT_TOTAL - len(hot_rows)
-        hot_rows += conn.execute("""
-            SELECT id, store, title, url, image_url, ends_at, created_at,
-                   discount_pct, price_old, price_new, currency
-            FROM deals
-            WHERE kind='hot_deal' AND discount_pct >= 70
-            ORDER BY RANDOM()
-            LIMIT ?
-        """, (need,)).fetchall()
-
-    # убираем дубли по id и ограничиваем HOT_TOTAL
-    uniq = {}
-    for r in hot_rows:
-        uniq[r[0]] = r
-    hot_rows = list(uniq.values())[:HOT_TOTAL]
-
-    free_games_rows = conn.execute("""
-        SELECT store,title,url,image_url,note
-        FROM free_games
-        ORDER BY sort ASC, created_at DESC
-        LIMIT 24
-    """).fetchall()
-
-    def allow_time(ends_at: str | None) -> bool:
-        if is_active_end(ends_at):
-            return True
-        return bool(show_expired) and is_expired_recent(ends_at, days=7)
-
-    def allow_store(row_store: str | None) -> bool:
-        if store == "all":
-            return True
-        return (row_store or "").strip().lower() == store
-
-    # keep
-    keep = []
-    for r in keep_rows:
-        did, st, title, url, image_url, ends_at, created_at = r
-
-        if not allow_store(st):
-            continue
-
-        img_main, img_fb = images_for_row(st, url, image_url)
-
-        keep.append({
-            "id": did,
-            "store": (st or "").strip().lower(),
-            "store_badge": store_badge(st),
-            "title": title,
-            "url": url,
-            "image": img_main,
-            "image_fallback": img_fb,
-            "ends_at": ends_at,
-            "is_new": is_new(created_at),
-            "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
-            "created_at": created_at,
-            "expired": not is_active_end(ends_at),
-            "time_left": time_left_label(ends_at),
-            "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=keep",
-        })
-
-    # weekend
-    weekend = []
-    for r in weekend_rows:
-        did, st, title, url, image_url, ends_at, created_at = r
-
-        if not (allow_time(ends_at) and allow_store(st)):
-            continue
-
-        img_main, img_fb = images_for_row(st, url, image_url)
-
-        weekend.append({
-            "id": did,
-            "store": (st or "").strip().lower(),
-            "store_badge": store_badge(st),
-            "title": title,
-            "url": url,
-            "image": img_main,
-            "image_fallback": img_fb,
-            "ends_at": ends_at,
-            "is_new": is_new(created_at),
-            "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
-            "created_at": created_at,
-            "expired": not is_active_end(ends_at),
-            "time_left": time_left_label(ends_at),
-            "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=weekend",
-        })
-
-    # hot
-    hot = []
-    for r in hot_rows:
-        did, st, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency = r
-
-        if not allow_store(st):
-            continue
-
-        img_main, img_fb = images_for_row(st, url, image_url)
-
-        hot.append({
-            "id": did,
-            "store": (st or "").strip().lower(),
-            "store_badge": store_badge(st),
-            "title": title,
-            "url": url,
-            "image": img_main,
-            "image_fallback": img_fb,
-            "ends_at": ends_at,
-            "is_new": is_new(created_at),
-            "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
-            "created_at": created_at,
-            "expired": not is_active_end(ends_at),
-            "time_left": time_left_label(ends_at),
-            "discount_pct": discount_pct,
-            "price_old": price_old,
-            "price_new": price_new,
-            "currency": currency,
-            "price_old_fmt": fmt_price(price_old),
-            "price_new_fmt": fmt_price(price_new),
-            "currency_sym": currency_symbol(currency),
-            "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
-        })
     
-        lfg_rows = conn.execute("""
-        SELECT id, created_at, game, region, platform, note, tg, expires_at
-        FROM lfg
-        WHERE active=1
-          AND (expires_at IS NULL OR expires_at > ?)
-        ORDER BY created_at DESC
-        LIMIT 12
-    """, (datetime.utcnow().isoformat(),)).fetchall()
+    # Нормализация
+    store = (store or "all").strip().lower()
+    kind = (kind or "all").strip().lower()
 
-    manual_rows = conn.execute("""
-        SELECT id, created_at, title, url, image_url, store, kind,
-                price_old, price_new, currency, ends_at
-        FROM manual_news
-        WHERE is_published=1
-        ORDER BY datetime(created_at) DESC
-        LIMIT 12
-    """).fetchall()
+    # Списки для рендеринга
+    keep = []
+    weekend = []
+    hot = []
 
-    manual_items = []
-    for (mid, created_at, title, url, image_url, store, kind, po, pn, cur, ends_at) in manual_rows:
-        store_norm = (store or "").strip().lower()
-        badge = store_badge(store_norm)
+    # 1. Получаем Free to Keep
+    if kind in ["all", "keep"]:
+        rows = conn.execute("""
+            SELECT id, store, title, url, image_url, ends_at, created_at 
+            FROM deals WHERE kind='free_to_keep' 
+            ORDER BY created_at DESC LIMIT 150
+        """).fetchall()
+        for r in rows:
+            # Безопасная фильтрация по времени и магазину
+            if not (allow_time(r['ends_at'], show_expired) and allow_store(r['store'], store)):
+                continue
+            img_main, img_fb = images_for_row(r['store'], r['url'], r['image_url'])
+            keep.append(build_item_dict(r, img_main, img_fb, "keep"))
 
-        img_main, _ = images_for_row(store_norm, url, image_url)
+    # 2. Получаем Weekend (аналогично)
+    if kind in ["all", "weekend"]:
+        rows = conn.execute("SELECT id, store, title, url, image_url, ends_at, created_at FROM deals WHERE kind='free_weekend' ORDER BY created_at DESC").fetchall()
+        for r in rows:
+            if not (allow_time(r['ends_at'], show_expired) and allow_store(r['store'], store)):
+                continue
+            img_main, img_fb = images_for_row(r['store'], r['url'], r['image_url'])
+            weekend.append(build_item_dict(r, img_main, img_fb, "weekend"))
 
-        manual_items.append({
-            "id": f"m_{mid}",
-            "title": title,
-            "url": url,
-            "image": img_main,
-            "badge": badge,
-            "store": store_norm,
-            "kind": kind or "news",
-            "price_old": po,
-            "price_new": pn,
-            "currency": cur or "USD",
-            "ends_at_fmt": (format_expiry(ends_at) if ends_at else ""),
-            # чтобы клики тоже трекались (src=manual)
-            "go": f"/go_manual/{mid}?src=manual",
-        })
+    # 3. Получаем Hot Deals (упрощенная выборка для стабильности)
+    if kind in ["all", "deals"]:
+        # Достаем все скидки выше 70%
+        hot_rows = conn.execute("""
+            SELECT id, store, title, url, image_url, ends_at, created_at, 
+                   discount_pct, price_old, price_new, currency 
+            FROM deals WHERE kind='hot_deal' AND discount_pct >= 70
+            ORDER BY discount_pct DESC LIMIT 40
+        """).fetchall()
+        for r in hot_rows:
+            if not allow_store(r['store'], store): continue
+            img_main, img_fb = images_for_row(r['store'], r['url'], r['image_url'])
+            # Собираем данные скидки
+            item = build_item_dict(r, img_main, img_fb, "deals")
+            item.update({
+                "discount_pct": r['discount_pct'],
+                "price_old_fmt": fmt_price(r['price_old']),
+                "price_new_fmt": fmt_price(r['price_new']),
+                "currency_sym": currency_symbol(r['currency'])
+            })
+            hot.append(item)
 
+    # LFG и прочее (теперь через r['id'] будет работать)
+    lfg_rows = conn.execute("SELECT * FROM lfg WHERE active=1 ORDER BY created_at DESC LIMIT 12").fetchall()
+    lfg = [dict(r) for r in lfg_rows] # конвертируем в список словарей для Jinja
+
+    # Статистика
+    stats = calc_savings(conn)
     conn.close()
 
-    lfg = []
-    for r in lfg_rows:
-        lfg.append({
-            "id": r["id"],
-            "created_at": r["created_at"],
-            "game": r["game"],
-            "region": r["region"],
-            "platform": r["platform"],
-            "note": r["note"],
-            "tg": r["tg"],
-            "tg_url": f"{SITE_BASE}/tg/lfg/{r['id']}",
-        })
-
-    keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
-    weekend.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
-    hot.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
-
-    # free_games
-    free_games = []
-    for st, title, url, image_url, note in free_games_rows:
-        st_norm = (st or "").strip().lower()
-        img = image_url or ""
-        if not img and st_norm == "steam":
-            img = steam_header_cdn_from_url(url) or ""
-
-        free_games.append({
-            "store": st_norm,
-            "store_badge": store_badge(st_norm),
-            "title": title,
-            "url": url,
-            "image_url": img,
-            "note": note,
-        })
-
-    total_games = len(keep) + len(weekend) + len(hot)
-    new_today = sum(1 for g in (keep + weekend + hot) if g.get("is_new"))
-    expiring_soon = sum(
-        1 for g in (keep + weekend)
-        if g.get("time_left") and ("час" in g.get("time_left", "") or "мин" in g.get("time_left", ""))
-    )
-    last_update = datetime.now().strftime("%d.%m.%Y %H:%M")
-
-    stats = calc_savings(db())
-
     return PAGE.render(
-        keep=keep,
-        weekend=weekend,
-        hot=hot,
+        keep=keep, 
+        weekend=weekend, 
+        hot=hot, 
+        lfg=lfg,
+        store=store, 
+        kind=kind, 
+        show_expired=show_expired,
+        savings=stats, 
+        last_update=datetime.now().strftime("%d.%m %H:%M"),
         free_games=free_games,
         steam_min=STEAM_MIN,
         epic_min=EPIC_MIN,
-        show_expired=int(show_expired),
-        store=store,
-        kind=kind,
         total_games=total_games,
         new_today=new_today,
         expiring_soon=expiring_soon,
-        last_update=last_update,
         generate_placeholder=lambda t, s: "",
-        lfg=lfg,
         tg_group_url=TG_GROUP_URL,
-        savings=stats,
         manual=manual_items,
     )
+
+# Вспомогательная функция для сборки словаря (чтобы не дублировать код)
+def build_item_dict(r, img, fb, content_type):
+    return {
+        "id": r['id'],
+        "store": (r['store'] or "").lower(),
+        "title": r['title'],
+        "url": r['url'],
+        "image": img,
+        "image_fallback": fb,
+        "ends_at": r['ends_at'],
+        "is_new": is_new(r['created_at']),
+        "ends_at_fmt": format_expiry(r['ends_at']) if r['ends_at'] else "",
+        "expired": not is_active_end(r['ends_at']),
+        "time_left": time_left_label(r['ends_at']),
+        "go_url": f"{SITE_BASE}/go/{r['id']}?src=site&content={content_type}"
+    }
 
 from fastapi import Form, Request
 
