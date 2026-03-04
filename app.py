@@ -3717,7 +3717,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     for r in keep_rows:
         did, st, title, url, image_url, ends_at, created_at = r
 
-        if not (allow_time(ends_at) and allow_store(st)):
+        if not allow_store(st):
             continue
 
         img_main, img_fb = images_for_row(st, url, image_url)
