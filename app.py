@@ -2326,13 +2326,15 @@ PAGE = Template("""
         .section-title { margin:0; font-size:18px; font-weight:900; }
         .section-sub { opacity:.75; font-size:12px; }
 
-        .card.exclusive { border:1px solid rgba(255,255,255,.16); }
+        .card.exclusive { border:1px solid rgba(255,215,0,.2); }
         .exclusive-pill{
-            position:absolute; top:10px; left:10px;
-            padding:6px 10px; border-radius:999px;
-            background:rgba(99,102,241,.18);
-            border:1px solid rgba(99,102,241,.35);
-            font-weight:800; font-size:12px;
+            position:absolute; top:10px; right:10px;
+            padding:6px 12px; border-radius:999px;
+            background:rgba(255,215,0,.2);
+            border:1px solid rgba(255,215,0,.4);
+            font-weight:800; font-size:11px;
+            color:#ffd700;
+            text-shadow:0 1px 2px rgba(0,0,0,.3);
         }        
         
         /* Теги */
@@ -2912,52 +2914,6 @@ PAGE = Template("""
   {% endif %}
 </div>
                 
-{% if manual and manual|length %}
-<section class="section">
-  <div class="section-head"><section data-tour="exclusive">
-    <h2 class="section-title">✨ Эксклюзивы / Manual picks</h2></section>
-    <div class="section-sub">Ручные находки — то, что легко пропустить</div>
-  </div>
-
-  <div class="grid">
-    {% for it in manual %}
-      <article class="card exclusive">
-        <a class="card-link" href="{{ it.go }}" target="_blank" rel="nofollow">
-          <div class="card-img">
-            <img src="{{ it.image }}" alt="">
-            <div class="pill exclusive-pill">EXCLUSIVE</div>
-            <div class="badge">{{ it.badge|safe }}</div>
-          </div>
-
-          <div class="card-body">
-            <div class="card-title">{{ it.title }}</div>
-
-            <div class="card-meta">
-              {% if it.price_old is not none or it.price_new is not none %}
-                <span class="price">
-                  {% if it.price_old is not none and it.price_new is not none and it.price_new < it.price_old %}
-                    <s>{{ "%.2f"|format(it.price_old) }} {{ it.currency }}</s>
-                    <b>{{ "%.2f"|format(it.price_new) }} {{ it.currency }}</b>
-                  {% elif it.price_new is not none %}
-                    <b>{{ "%.2f"|format(it.price_new) }} {{ it.currency }}</b>
-                  {% else %}
-                    <b>{{ "%.2f"|format(it.price_old) }} {{ it.currency }}</b>
-                  {% endif %}
-                </span>
-              {% endif %}
-
-              {% if it.ends_at_fmt %}
-                <span class="ends">⏳ {{ it.ends_at_fmt }}</span>
-              {% endif %}
-            </div>
-          </div>
-        </a>
-      </article>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
-                
 
         {% if kind in ["all", "deals"] and hot|length > 0 %}
 <div class="section">
@@ -3045,6 +3001,78 @@ PAGE = Template("""
     <span class="vote-count" data-count="down">{{ game.down or 0 }}</span>
   </button>
 </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if kind in ["all", "deals"] and manual and manual|length > 0 %}
+<div class="section">
+  <section data-tour="exclusive">
+    <div class="section-header">
+      <span class="section-icon">✨</span>
+      <h2 class="section-title">
+        <span class="t-desktop">Эксклюзивы • Manual Picks</span>
+        <span class="t-mobile">Эксклюзивы</span>
+      </h2>
+      <span class="section-count">{{ manual|length }}</span>
+    </div>
+  </section>
+
+  <div class="games-grid">
+    {% for it in manual %}
+    <div class="game-card exclusive">
+      <div class="game-image-container">
+        <div class="store-badge store-{{ it.store }}">
+          {{ it.badge|safe }}
+        </div>
+        
+        {% if it.image %}
+        <img src="{{ it.image }}" alt="{{ it.title }}" class="game-image" loading="lazy">
+        <div class="exclusive-pill">EXCLUSIVE</div>
+        {% else %}
+        <div class="image-placeholder">
+          <div class="image-placeholder-icon">✨</div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="game-content">
+        <h3 class="game-title">{{ it.title }}</h3>
+
+        <div class="game-meta" style="align-items:center;justify-content:space-between;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="meta-tag" style="background:rgba(255,215,0,0.2);color:#ffd700;border:1px solid rgba(255,215,0,0.3)">EXCLUSIVE</span>
+          </div>
+
+          {% if it.price_old is not none or it.price_new is not none %}
+          <div style="font-size:0.85rem;color:var(--text-secondary);font-weight:700;white-space:nowrap;">
+            {% if it.price_old is not none and it.price_new is not none and it.price_new < it.price_old %}
+              <span style="opacity:.75;text-decoration:line-through;">
+                {{ "%.0f"|format(it.price_old) }} {{ it.currency }}
+              </span>
+              <span style="margin:0 6px;opacity:.6;">→</span>
+              <span style="color:var(--text-primary);">
+                {{ "%.0f"|format(it.price_new) }} {{ it.currency }}
+              </span>
+            {% elif it.price_new is not none %}
+              <span style="color:var(--text-primary);">
+                {{ "%.0f"|format(it.price_new) }} {{ it.currency }}
+              </span>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+
+        {% if it.ends_at_fmt %}
+        <div class="game-timer">
+          ⏳ До: <span class="timer-time">{{ it.ends_at_fmt }}</span>
+        </div>
+        {% endif %}
+
+        <a href="{{ it.go }}" target="_blank" class="btn">Забрать →</a>
+      </div>
     </div>
     {% endfor %}
   </div>
