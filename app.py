@@ -2870,7 +2870,7 @@ PAGE = Template("""
         </div>
         {% endif %}
                 
-
+    {% if kind in ["all"] and lfg|length > 0 %}
         <div class="section">
   <div class="section-header">
     <span class="section-icon">🎮</span>
@@ -2889,6 +2889,7 @@ PAGE = Template("""
     {% endif %}
   </div>
                 </div>
+            
     
 
   {% if lfg|length == 0 %}
@@ -2913,6 +2914,7 @@ PAGE = Template("""
     </div>
   {% endif %}
 </div>
+    {% endif %}
                 
 
         {% if kind in ["all", "deals"] and hot|length > 0 %}
