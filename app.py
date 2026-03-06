@@ -1709,6 +1709,356 @@ def admin_news_add(
 
     return RedirectResponse(url=f"/admin/news?key={key}", status_code=302)
 
+# ✨ АДМИНКА ДЛЯ ЭКСКЛЮЗИВОВ
+# Использует тот же ADMIN_KEY что и /admin/news
+# Вставь ПОСЛЕ функции admin_news_add (после строки с RedirectResponse)
+
+@app.get("/admin/exclusive", response_class=HTMLResponse)
+def admin_exclusive_list(key: str = ""):
+    """Список всех эксклюзивов с управлением"""
+    if key != ADMIN_KEY:
+        return HTMLResponse("Forbidden - Add ?key=YOUR_KEY", status_code=403)
+    
+    conn = db()
+    
+    # Получаем все записи
+    rows = conn.execute("""
+        SELECT id, created_at, title, url, image_url, store, kind, 
+               price_old, price_new, currency, ends_at, is_published
+        FROM manual_news
+        ORDER BY created_at DESC
+    """).fetchall()
+    
+    # Статистика
+    total = len(rows)
+    active = sum(1 for r in rows if r[11])  # is_published
+    hidden = total - active
+    
+    conn.close()
+    
+    # HTML страница
+    html = f"""
+    <!doctype html>
+    <html>
+    <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width,initial-scale=1"/>
+        <title>Эксклюзивы - Админка</title>
+        <style>
+            body {{
+                font-family: system-ui;
+                background: #0a0e1a;
+                color: #e2e8f0;
+                padding: 24px;
+                margin: 0;
+            }}
+            .container {{
+                max-width: 1200px;
+                margin: 0 auto;
+            }}
+            h1 {{
+                margin: 0 0 20px 0;
+                font-size: 1.8rem;
+            }}
+            .stats {{
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+                margin-bottom: 20px;
+            }}
+            .stat {{
+                background: #11162a;
+                border: 1px solid rgba(255,255,255,.1);
+                border-radius: 12px;
+                padding: 16px;
+            }}
+            .stat-value {{
+                font-size: 2rem;
+                font-weight: 700;
+                color: #4f46e5;
+            }}
+            .stat-label {{
+                opacity: 0.7;
+                font-size: 0.9rem;
+                margin-top: 4px;
+            }}
+            .btn {{
+                display: inline-block;
+                padding: 10px 16px;
+                border-radius: 12px;
+                border: 0;
+                background: #4f46e5;
+                color: white;
+                font-weight: 700;
+                cursor: pointer;
+                text-decoration: none;
+                margin-bottom: 20px;
+            }}
+            .btn:hover {{
+                background: #4338ca;
+            }}
+            .card {{
+                background: #11162a;
+                border: 1px solid rgba(255,255,255,.1);
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 12px;
+            }}
+            .card.hidden {{
+                opacity: 0.5;
+                border-color: rgba(255,100,100,0.3);
+            }}
+            .card-header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 12px;
+            }}
+            .title {{
+                font-size: 1.2rem;
+                font-weight: 700;
+                margin-bottom: 8px;
+            }}
+            .badge {{
+                display: inline-block;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 0.75rem;
+                font-weight: 700;
+                text-transform: uppercase;
+            }}
+            .badge-active {{
+                background: rgba(34,197,94,0.2);
+                color: #22c55e;
+            }}
+            .badge-hidden {{
+                background: rgba(239,68,68,0.2);
+                color: #ef4444;
+            }}
+            .meta {{
+                display: flex;
+                gap: 12px;
+                margin: 8px 0;
+                font-size: 0.9rem;
+                opacity: 0.8;
+            }}
+            .price {{
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #22c55e;
+                margin: 8px 0;
+            }}
+            .price-old {{
+                text-decoration: line-through;
+                opacity: 0.6;
+                margin-right: 8px;
+            }}
+            .actions {{
+                display: flex;
+                gap: 8px;
+                margin-top: 12px;
+            }}
+            .btn-sm {{
+                padding: 6px 12px;
+                border-radius: 8px;
+                border: 0;
+                font-weight: 600;
+                cursor: pointer;
+                font-size: 0.85rem;
+            }}
+            .btn-delete {{
+                background: #ef4444;
+                color: white;
+            }}
+            .btn-delete:hover {{
+                background: #dc2626;
+            }}
+            .btn-hide {{
+                background: #f59e0b;
+                color: white;
+            }}
+            .btn-hide:hover {{
+                background: #d97706;
+            }}
+            .btn-show {{
+                background: #22c55e;
+                color: white;
+            }}
+            .btn-show:hover {{
+                background: #16a34a;
+            }}
+            .url {{
+                color: #818cf8;
+                font-size: 0.85rem;
+                word-break: break-all;
+                margin: 8px 0;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🛡️ Управление эксклюзивами</h1>
+            
+            <a href="/admin/news?key={key}" class="btn">➕ Добавить новый</a>
+            
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value">{total}</div>
+                    <div class="stat-label">Всего</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{active}</div>
+                    <div class="stat-label">Активные (на сайте)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value">{hidden}</div>
+                    <div class="stat-label">Скрытые</div>
+                </div>
+            </div>
+    """
+    
+    if not rows:
+        html += '<div class="card"><p>Нет эксклюзивов. <a href="/admin/news?key=' + key + '">Добавить первый →</a></p></div>'
+    else:
+        for r in rows:
+            exc_id, created, title, url, img, store, kind, p_old, p_new, cur, ends, is_pub = r
+            
+            # Иконка магазина
+            store_icon = {"steam": "🎮", "epic": "🟦", "gog": "🟪", "prime": "🟨"}.get(store or "", "📦")
+            
+            # Цена
+            price_html = ""
+            if p_old or p_new:
+                old_str = f"{p_old:.0f}" if p_old else ""
+                new_str = f"{p_new:.0f}" if p_new else ""
+                curr_str = cur or "USD"
+                
+                if old_str and new_str:
+                    price_html = f'<div class="price"><span class="price-old">{old_str} {curr_str}</span>→ {new_str} {curr_str}</div>'
+                elif new_str:
+                    price_html = f'<div class="price">{new_str} {curr_str}</div>'
+            
+            # Статус
+            status = "АКТИВЕН" if is_pub else "СКРЫТ"
+            badge_class = "badge-active" if is_pub else "badge-hidden"
+            card_class = "card" if is_pub else "card hidden"
+            
+            # Кнопки
+            toggle_btn = f'<button class="btn-sm btn-hide" onclick="toggle({exc_id}, 0)">👁️ Скрыть</button>' if is_pub else f'<button class="btn-sm btn-show" onclick="toggle({exc_id}, 1)">✅ Показать</button>'
+            
+            html += f"""
+            <div class="{card_class}">
+                <div class="card-header">
+                    <div>
+                        <div class="title">{store_icon} {title}</div>
+                        <span class="badge {badge_class}">{status}</span>
+                    </div>
+                    <div style="opacity:0.6;font-size:0.85rem">ID: {exc_id}</div>
+                </div>
+                
+                <div class="meta">
+                    <span>🏪 {store or 'other'}</span>
+                    <span>📁 {kind or 'news'}</span>
+                    {f'<span>⏰ до {ends[:16]}</span>' if ends else ''}
+                    <span>📅 {created[:10] if created else ''}</span>
+                </div>
+                
+                {price_html}
+                
+                <div class="url">🔗 {url[:100]}{'...' if len(url) > 100 else ''}</div>
+                
+                <div class="actions">
+                    {toggle_btn}
+                    <button class="btn-sm btn-delete" onclick="del({exc_id})">🗑 Удалить</button>
+                    <a href="{url}" target="_blank" class="btn-sm" style="background:#3b82f6;color:white;text-decoration:none">🔗 Открыть</a>
+                </div>
+            </div>
+            """
+    
+    html += """
+        </div>
+        
+        <script>
+        const KEY = '""" + key + """';
+        
+        async function toggle(id, val) {
+            try {
+                const r = await fetch(`/admin/exclusive/toggle/${{id}}?key=${{KEY}}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({is_published: val})
+                });
+                
+                if (r.ok) {
+                    location.reload();
+                } else {
+                    alert('Ошибка!');
+                }
+            } catch(e) {
+                alert('Ошибка: ' + e);
+            }
+        }
+        
+        async function del(id) {
+            if (!confirm('Удалить этот эксклюзив навсегда?')) return;
+            
+            try {
+                const r = await fetch(`/admin/exclusive/delete/${{id}}?key=${{KEY}}`, {
+                    method: 'POST'
+                });
+                
+                if (r.ok) {
+                    alert('✅ Удалено!');
+                    location.reload();
+                } else {
+                    alert('Ошибка!');
+                }
+            } catch(e) {
+                alert('Ошибка: ' + e);
+            }
+        }
+        </script>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(html)
+
+
+@app.post("/admin/exclusive/delete/{exc_id}")
+def admin_exclusive_delete(exc_id: int, key: str = ""):
+    """Удалить эксклюзив"""
+    if key != ADMIN_KEY:
+        return {"ok": False, "error": "forbidden"}
+    
+    conn = db()
+    conn.execute("DELETE FROM manual_news WHERE id=?", (exc_id,))
+    conn.commit()
+    conn.close()
+    
+    return {"ok": True}
+
+
+@app.post("/admin/exclusive/toggle/{exc_id}")
+async def admin_exclusive_toggle(exc_id: int, key: str = "", request: Request = None):
+    """Скрыть/показать эксклюзив"""
+    if key != ADMIN_KEY:
+        return {"ok": False, "error": "forbidden"}
+    
+    # Читаем JSON
+    body = await request.json()
+    is_pub = body.get('is_published', 1)
+    
+    conn = db()
+    conn.execute("UPDATE manual_news SET is_published=? WHERE id=?", (is_pub, exc_id))
+    conn.commit()
+    conn.close()
+    
+    return {"ok": True}
+
+
+
+
 # --------------------
 # SAVE + POST
 # --------------------
@@ -5337,352 +5687,7 @@ def admin_cleanup(request: Request):
     
     return {"ok": True, "deleted": deleted}
 
-# ✨ АДМИНКА ДЛЯ ЭКСКЛЮЗИВОВ
-# Использует тот же ADMIN_KEY что и /admin/news
-# Вставь ПОСЛЕ функции admin_news_add (после строки с RedirectResponse)
 
-@app.get("/admin/exclusive", response_class=HTMLResponse)
-def admin_exclusive_list(key: str = ""):
-    """Список всех эксклюзивов с управлением"""
-    if key != ADMIN_KEY:
-        return HTMLResponse("Forbidden - Add ?key=YOUR_KEY", status_code=403)
-    
-    conn = db()
-    
-    # Получаем все записи
-    rows = conn.execute("""
-        SELECT id, created_at, title, url, image_url, store, kind, 
-               price_old, price_new, currency, ends_at, is_published
-        FROM manual_news
-        ORDER BY created_at DESC
-    """).fetchall()
-    
-    # Статистика
-    total = len(rows)
-    active = sum(1 for r in rows if r[11])  # is_published
-    hidden = total - active
-    
-    conn.close()
-    
-    # HTML страница
-    html = f"""
-    <!doctype html>
-    <html>
-    <head>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width,initial-scale=1"/>
-        <title>Эксклюзивы - Админка</title>
-        <style>
-            body {{
-                font-family: system-ui;
-                background: #0a0e1a;
-                color: #e2e8f0;
-                padding: 24px;
-                margin: 0;
-            }}
-            .container {{
-                max-width: 1200px;
-                margin: 0 auto;
-            }}
-            h1 {{
-                margin: 0 0 20px 0;
-                font-size: 1.8rem;
-            }}
-            .stats {{
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 12px;
-                margin-bottom: 20px;
-            }}
-            .stat {{
-                background: #11162a;
-                border: 1px solid rgba(255,255,255,.1);
-                border-radius: 12px;
-                padding: 16px;
-            }}
-            .stat-value {{
-                font-size: 2rem;
-                font-weight: 700;
-                color: #4f46e5;
-            }}
-            .stat-label {{
-                opacity: 0.7;
-                font-size: 0.9rem;
-                margin-top: 4px;
-            }}
-            .btn {{
-                display: inline-block;
-                padding: 10px 16px;
-                border-radius: 12px;
-                border: 0;
-                background: #4f46e5;
-                color: white;
-                font-weight: 700;
-                cursor: pointer;
-                text-decoration: none;
-                margin-bottom: 20px;
-            }}
-            .btn:hover {{
-                background: #4338ca;
-            }}
-            .card {{
-                background: #11162a;
-                border: 1px solid rgba(255,255,255,.1);
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 12px;
-            }}
-            .card.hidden {{
-                opacity: 0.5;
-                border-color: rgba(255,100,100,0.3);
-            }}
-            .card-header {{
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 12px;
-            }}
-            .title {{
-                font-size: 1.2rem;
-                font-weight: 700;
-                margin-bottom: 8px;
-            }}
-            .badge {{
-                display: inline-block;
-                padding: 4px 8px;
-                border-radius: 6px;
-                font-size: 0.75rem;
-                font-weight: 700;
-                text-transform: uppercase;
-            }}
-            .badge-active {{
-                background: rgba(34,197,94,0.2);
-                color: #22c55e;
-            }}
-            .badge-hidden {{
-                background: rgba(239,68,68,0.2);
-                color: #ef4444;
-            }}
-            .meta {{
-                display: flex;
-                gap: 12px;
-                margin: 8px 0;
-                font-size: 0.9rem;
-                opacity: 0.8;
-            }}
-            .price {{
-                font-size: 1.1rem;
-                font-weight: 700;
-                color: #22c55e;
-                margin: 8px 0;
-            }}
-            .price-old {{
-                text-decoration: line-through;
-                opacity: 0.6;
-                margin-right: 8px;
-            }}
-            .actions {{
-                display: flex;
-                gap: 8px;
-                margin-top: 12px;
-            }}
-            .btn-sm {{
-                padding: 6px 12px;
-                border-radius: 8px;
-                border: 0;
-                font-weight: 600;
-                cursor: pointer;
-                font-size: 0.85rem;
-            }}
-            .btn-delete {{
-                background: #ef4444;
-                color: white;
-            }}
-            .btn-delete:hover {{
-                background: #dc2626;
-            }}
-            .btn-hide {{
-                background: #f59e0b;
-                color: white;
-            }}
-            .btn-hide:hover {{
-                background: #d97706;
-            }}
-            .btn-show {{
-                background: #22c55e;
-                color: white;
-            }}
-            .btn-show:hover {{
-                background: #16a34a;
-            }}
-            .url {{
-                color: #818cf8;
-                font-size: 0.85rem;
-                word-break: break-all;
-                margin: 8px 0;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🛡️ Управление эксклюзивами</h1>
-            
-            <a href="/admin/news?key={key}" class="btn">➕ Добавить новый</a>
-            
-            <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">{total}</div>
-                    <div class="stat-label">Всего</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{active}</div>
-                    <div class="stat-label">Активные (на сайте)</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{hidden}</div>
-                    <div class="stat-label">Скрытые</div>
-                </div>
-            </div>
-    """
-    
-    if not rows:
-        html += '<div class="card"><p>Нет эксклюзивов. <a href="/admin/news?key=' + key + '">Добавить первый →</a></p></div>'
-    else:
-        for r in rows:
-            exc_id, created, title, url, img, store, kind, p_old, p_new, cur, ends, is_pub = r
-            
-            # Иконка магазина
-            store_icon = {"steam": "🎮", "epic": "🟦", "gog": "🟪", "prime": "🟨"}.get(store or "", "📦")
-            
-            # Цена
-            price_html = ""
-            if p_old or p_new:
-                old_str = f"{p_old:.0f}" if p_old else ""
-                new_str = f"{p_new:.0f}" if p_new else ""
-                curr_str = cur or "USD"
-                
-                if old_str and new_str:
-                    price_html = f'<div class="price"><span class="price-old">{old_str} {curr_str}</span>→ {new_str} {curr_str}</div>'
-                elif new_str:
-                    price_html = f'<div class="price">{new_str} {curr_str}</div>'
-            
-            # Статус
-            status = "АКТИВЕН" if is_pub else "СКРЫТ"
-            badge_class = "badge-active" if is_pub else "badge-hidden"
-            card_class = "card" if is_pub else "card hidden"
-            
-            # Кнопки
-            toggle_btn = f'<button class="btn-sm btn-hide" onclick="toggle({exc_id}, 0)">👁️ Скрыть</button>' if is_pub else f'<button class="btn-sm btn-show" onclick="toggle({exc_id}, 1)">✅ Показать</button>'
-            
-            html += f"""
-            <div class="{card_class}">
-                <div class="card-header">
-                    <div>
-                        <div class="title">{store_icon} {title}</div>
-                        <span class="badge {badge_class}">{status}</span>
-                    </div>
-                    <div style="opacity:0.6;font-size:0.85rem">ID: {exc_id}</div>
-                </div>
-                
-                <div class="meta">
-                    <span>🏪 {store or 'other'}</span>
-                    <span>📁 {kind or 'news'}</span>
-                    {f'<span>⏰ до {ends[:16]}</span>' if ends else ''}
-                    <span>📅 {created[:10] if created else ''}</span>
-                </div>
-                
-                {price_html}
-                
-                <div class="url">🔗 {url[:100]}{'...' if len(url) > 100 else ''}</div>
-                
-                <div class="actions">
-                    {toggle_btn}
-                    <button class="btn-sm btn-delete" onclick="del({exc_id})">🗑 Удалить</button>
-                    <a href="{url}" target="_blank" class="btn-sm" style="background:#3b82f6;color:white;text-decoration:none">🔗 Открыть</a>
-                </div>
-            </div>
-            """
-    
-    html += """
-        </div>
-        
-        <script>
-        const KEY = '""" + key + """';
-        
-        async function toggle(id, val) {
-            try {
-                const r = await fetch(`/admin/exclusive/toggle/${{id}}?key=${{KEY}}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({is_published: val})
-                });
-                
-                if (r.ok) {
-                    location.reload();
-                } else {
-                    alert('Ошибка!');
-                }
-            } catch(e) {
-                alert('Ошибка: ' + e);
-            }
-        }
-        
-        async function del(id) {
-            if (!confirm('Удалить этот эксклюзив навсегда?')) return;
-            
-            try {
-                const r = await fetch(`/admin/exclusive/delete/${{id}}?key=${{KEY}}`, {
-                    method: 'POST'
-                });
-                
-                if (r.ok) {
-                    alert('✅ Удалено!');
-                    location.reload();
-                } else {
-                    alert('Ошибка!');
-                }
-            } catch(e) {
-                alert('Ошибка: ' + e);
-            }
-        }
-        </script>
-    </body>
-    </html>
-    """
-    
-    return HTMLResponse(html)
-
-
-@app.post("/admin/exclusive/delete/{exc_id}")
-def admin_exclusive_delete(exc_id: int, key: str = ""):
-    """Удалить эксклюзив"""
-    if key != ADMIN_KEY:
-        return {"ok": False, "error": "forbidden"}
-    
-    conn = db()
-    conn.execute("DELETE FROM manual_news WHERE id=?", (exc_id,))
-    conn.commit()
-    conn.close()
-    
-    return {"ok": True}
-
-
-@app.post("/admin/exclusive/toggle/{exc_id}")
-async def admin_exclusive_toggle(exc_id: int, key: str = "", request: Request = None):
-    """Скрыть/показать эксклюзив"""
-    if key != ADMIN_KEY:
-        return {"ok": False, "error": "forbidden"}
-    
-    # Читаем JSON
-    body = await request.json()
-    is_pub = body.get('is_published', 1)
-    
-    conn = db()
-    conn.execute("UPDATE manual_news SET is_published=? WHERE id=?", (is_pub, exc_id))
-    conn.commit()
-    conn.close()
-    
-    return {"ok": True}
 
 
 @app.on_event("startup")
