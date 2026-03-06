@@ -5337,6 +5337,459 @@ def admin_cleanup(request: Request):
     
     return {"ok": True, "deleted": deleted}
 
+# ✨ АДМИНКА ДЛЯ ЭКСКЛЮЗИВОВ
+# Добавь этот код после функции admin_lfg_panel (примерно после строки 5150)
+
+@app.get("/admin/exclusive", response_class=HTMLResponse)
+def admin_exclusive_panel(request: Request, filter: str = "all"):
+    """Админ-панель для управления эксклюзивами"""
+    # Проверка авторизации
+    redirect_check = require_admin(request)
+    if redirect_check:
+        return redirect_check
+    
+    conn = db()
+    
+    # Фильтры
+    if filter == "active":
+        rows = conn.execute("""
+            SELECT id, created_at, title, url, store, kind, 
+                   price_old, price_new, currency, ends_at, is_published
+            FROM manual_news
+            WHERE is_published=1
+            ORDER BY created_at DESC
+        """).fetchall()
+    elif filter == "hidden":
+        rows = conn.execute("""
+            SELECT id, created_at, title, url, store, kind,
+                   price_old, price_new, currency, ends_at, is_published
+            FROM manual_news
+            WHERE is_published=0
+            ORDER BY created_at DESC
+        """).fetchall()
+    else:  # all
+        rows = conn.execute("""
+            SELECT id, created_at, title, url, store, kind,
+                   price_old, price_new, currency, ends_at, is_published
+            FROM manual_news
+            ORDER BY created_at DESC
+        """).fetchall()
+    
+    # Статистика
+    total = conn.execute("SELECT COUNT(*) FROM manual_news").fetchone()[0]
+    active = conn.execute("SELECT COUNT(*) FROM manual_news WHERE is_published=1").fetchone()[0]
+    hidden = conn.execute("SELECT COUNT(*) FROM manual_news WHERE is_published=0").fetchone()[0]
+    
+    conn.close()
+    
+    # HTML
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Admin - Эксклюзивы</title>
+        <style>
+            body {{
+                font-family: system-ui, -apple-system, sans-serif;
+                background: #0a0e1a;
+                color: #e2e8f0;
+                margin: 0;
+                padding: 20px;
+            }}
+            .container {{
+                max-width: 1400px;
+                margin: 0 auto;
+            }}
+            .header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }}
+            .nav {{
+                display: flex;
+                gap: 15px;
+                margin-bottom: 20px;
+            }}
+            .nav a {{
+                padding: 10px 20px;
+                background: #1a1f36;
+                color: #e2e8f0;
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 8px;
+                text-decoration: none;
+                transition: all 0.2s;
+            }}
+            .nav a:hover {{
+                background: #252a44;
+                border-color: #667eea;
+            }}
+            .nav a.active {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-color: transparent;
+            }}
+            .stats {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+                margin-bottom: 20px;
+            }}
+            .stat-card {{
+                background: #1a1f36;
+                padding: 20px;
+                border-radius: 12px;
+                border: 1px solid rgba(255,255,255,0.1);
+            }}
+            .stat-value {{
+                font-size: 2rem;
+                font-weight: 700;
+                color: #667eea;
+            }}
+            .stat-label {{
+                color: #94a3b8;
+                font-size: 0.9rem;
+                margin-top: 5px;
+            }}
+            .filters {{
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+            }}
+            .filter-btn {{
+                padding: 10px 20px;
+                background: #1a1f36;
+                color: #e2e8f0;
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 8px;
+                text-decoration: none;
+                cursor: pointer;
+                transition: all 0.2s;
+            }}
+            .filter-btn:hover {{
+                background: #252a44;
+                border-color: #667eea;
+            }}
+            .filter-btn.active {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-color: transparent;
+            }}
+            .card {{
+                background: #1a1f36;
+                padding: 20px;
+                margin-bottom: 15px;
+                border-radius: 12px;
+                border: 1px solid rgba(255,255,255,0.1);
+            }}
+            .card.hidden {{
+                opacity: 0.5;
+                border-color: rgba(255,100,100,0.3);
+            }}
+            .card-header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 12px;
+            }}
+            .game-title {{
+                font-size: 1.2rem;
+                font-weight: 700;
+                color: #e2e8f0;
+            }}
+            .meta {{
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin: 12px 0;
+                font-size: 0.9rem;
+            }}
+            .meta-item {{
+                background: rgba(255,255,255,0.05);
+                padding: 4px 10px;
+                border-radius: 6px;
+                color: #94a3b8;
+            }}
+            .price {{
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #10b981;
+            }}
+            .price .old {{
+                text-decoration: line-through;
+                opacity: 0.6;
+                margin-right: 8px;
+            }}
+            .actions {{
+                display: flex;
+                gap: 10px;
+                margin-top: 15px;
+                flex-wrap: wrap;
+            }}
+            .btn {{
+                padding: 8px 16px;
+                border-radius: 8px;
+                border: none;
+                cursor: pointer;
+                font-weight: 600;
+                transition: all 0.2s;
+                text-decoration: none;
+                display: inline-block;
+            }}
+            .btn-delete {{
+                background: #ef4444;
+                color: white;
+            }}
+            .btn-delete:hover {{
+                background: #dc2626;
+            }}
+            .btn-hide {{
+                background: #f59e0b;
+                color: white;
+            }}
+            .btn-hide:hover {{
+                background: #d97706;
+            }}
+            .btn-show {{
+                background: #10b981;
+                color: white;
+            }}
+            .btn-show:hover {{
+                background: #059669;
+            }}
+            .btn-edit {{
+                background: #3b82f6;
+                color: white;
+            }}
+            .btn-edit:hover {{
+                background: #2563eb;
+            }}
+            .btn-logout {{
+                background: transparent;
+                color: #94a3b8;
+                border: 1px solid rgba(255,255,255,0.1);
+                padding: 8px 16px;
+            }}
+            .btn-add {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 12px 24px;
+                font-size: 1rem;
+            }}
+            .badge {{
+                display: inline-block;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 0.75rem;
+                font-weight: 700;
+                text-transform: uppercase;
+            }}
+            .badge-active {{
+                background: rgba(16, 185, 129, 0.2);
+                color: #10b981;
+            }}
+            .badge-hidden {{
+                background: rgba(239, 68, 68, 0.2);
+                color: #ef4444;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🛡️ Admin Panel - Эксклюзивы</h1>
+                <div style="display: flex; gap: 10px;">
+                    <a href="/admin/lfg" class="btn btn-logout">LFG →</a>
+                    <a href="/admin/logout" class="btn btn-logout">Выйти</a>
+                </div>
+            </div>
+            
+            <div class="nav">
+                <a href="/admin/news?key={os.getenv('ADMIN_KEY', '')}" class="btn-add">
+                    ➕ Добавить эксклюзив
+                </a>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value">{total}</div>
+                    <div class="stat-label">Всего эксклюзивов</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{active}</div>
+                    <div class="stat-label">Активные</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{hidden}</div>
+                    <div class="stat-label">Скрытые</div>
+                </div>
+            </div>
+            
+            <div class="filters">
+                <a href="/admin/exclusive?filter=all" class="filter-btn {'active' if filter == 'all' else ''}">
+                    📋 Все ({total})
+                </a>
+                <a href="/admin/exclusive?filter=active" class="filter-btn {'active' if filter == 'active' else ''}">
+                    ✅ Активные ({active})
+                </a>
+                <a href="/admin/exclusive?filter=hidden" class="filter-btn {'active' if filter == 'hidden' else ''}">
+                    👁️ Скрытые ({hidden})
+                </a>
+            </div>
+            
+            <div>
+    """
+    
+    for r in rows:
+        exc_id, created, title, url, store, kind, price_old, price_new, currency, ends_at, is_published = r
+        
+        # Форматирование
+        store_norm = (store or "").strip().lower()
+        store_emoji = {
+            "steam": "🎮",
+            "epic": "🟦",
+            "gog": "🟪",
+            "prime": "🟨"
+        }.get(store_norm, "📦")
+        
+        # Цены
+        price_html = ""
+        if price_old is not None or price_new is not None:
+            old = f"{price_old:.0f}" if price_old else ""
+            new = f"{price_new:.0f}" if price_new else ""
+            cur = currency or "USD"
+            
+            if old and new:
+                price_html = f'<div class="price"><span class="old">{old} {cur}</span> → {new} {cur}</div>'
+            elif new:
+                price_html = f'<div class="price">{new} {cur}</div>'
+        
+        # Статус
+        status_badge = '<span class="badge badge-active">АКТИВЕН</span>' if is_published else '<span class="badge badge-hidden">СКРЫТ</span>'
+        
+        card_class = "card" if is_published else "card hidden"
+        
+        html += f"""
+        <div class="{card_class}">
+            <div class="card-header">
+                <div>
+                    <div class="game-title">{store_emoji} {title}</div>
+                    {status_badge}
+                </div>
+                <div style="font-size:0.85rem;color:#64748b">
+                    ID: {exc_id} | {created[:16] if created else ''}
+                </div>
+            </div>
+            
+            <div class="meta">
+                <span class="meta-item">🏪 {store_norm or 'other'}</span>
+                <span class="meta-item">📁 {kind or 'news'}</span>
+                {f'<span class="meta-item">⏰ до {ends_at[:16]}</span>' if ends_at else ''}
+            </div>
+            
+            {price_html}
+            
+            <div style="margin:10px 0; opacity:0.8; font-size:0.9rem;">
+                🔗 <a href="{url}" target="_blank" style="color:#a5b4fc">{url[:60]}...</a>
+            </div>
+            
+            <div class="actions">
+                {'<button class="btn btn-hide" onclick="togglePublish(' + str(exc_id) + ', 0)">👁️ Скрыть</button>' if is_published else '<button class="btn btn-show" onclick="togglePublish(' + str(exc_id) + ', 1)">✅ Показать</button>'}
+                <button class="btn btn-delete" onclick="deleteExclusive({exc_id})">
+                    🗑 Удалить
+                </button>
+                <a href="{url}" target="_blank" class="btn btn-edit">
+                    🔗 Открыть
+                </a>
+            </div>
+        </div>
+        """
+    
+    if not rows:
+        html += "<div class='card'>Эксклюзивов нет</div>"
+    
+    html += """
+            </div>
+        </div>
+        
+        <script>
+        async function deleteExclusive(id) {
+            if(!confirm('Удалить этот эксклюзив навсегда?')) return;
+            
+            try {
+                const r = await fetch(`/admin/exclusive/delete/${id}`, {method: 'POST'});
+                if(r.ok) {
+                    alert('✅ Удалено!');
+                    location.reload();
+                } else {
+                    alert('❌ Ошибка удаления');
+                }
+            } catch(e) {
+                alert('❌ Ошибка сети: ' + e);
+            }
+        }
+        
+        async function togglePublish(id, value) {
+            try {
+                const r = await fetch(`/admin/exclusive/toggle/${id}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({is_published: value})
+                });
+                
+                if(r.ok) {
+                    location.reload();
+                } else {
+                    alert('❌ Ошибка');
+                }
+            } catch(e) {
+                alert('❌ Ошибка: ' + e);
+            }
+        }
+        </script>
+    </body>
+    </html>
+    """
+    
+    return HTMLResponse(html)
+
+
+@app.post("/admin/exclusive/delete/{exc_id}")
+def admin_delete_exclusive(exc_id: int, request: Request):
+    """Удалить эксклюзив"""
+    redirect_check = require_admin(request)
+    if redirect_check:
+        return redirect_check
+    
+    conn = db()
+    conn.execute("DELETE FROM manual_news WHERE id=?", (exc_id,))
+    conn.commit()
+    conn.close()
+    
+    return {"ok": True}
+
+
+@app.post("/admin/exclusive/toggle/{exc_id}")
+async def admin_toggle_exclusive(exc_id: int, request: Request):
+    """Скрыть/показать эксклюзив"""
+    redirect_check = require_admin(request)
+    if redirect_check:
+        return redirect_check
+    
+    # Читаем JSON из body
+    body = await request.json()
+    is_pub = body.get('is_published', 1)
+    
+    conn = db()
+    conn.execute("UPDATE manual_news SET is_published=? WHERE id=?", (is_pub, exc_id))
+    conn.commit()
+    conn.close()
+    
+    return {"ok": True}
+
 
 
 @app.on_event("startup")
