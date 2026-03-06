@@ -2026,35 +2026,43 @@ def admin_exclusive_list(key: str = ""):
 
 
 @app.post("/admin/exclusive/delete/{exc_id}")
-def admin_exclusive_delete(exc_id: int, key: str = ""):
+async def admin_exclusive_delete(exc_id: int, key: str = ""):
     """Удалить эксклюзив"""
     if key != ADMIN_KEY:
         return {"ok": False, "error": "forbidden"}
     
-    conn = db()
-    conn.execute("DELETE FROM manual_news WHERE id=?", (exc_id,))
-    conn.commit()
-    conn.close()
-    
-    return {"ok": True}
+    try:
+        conn = db()
+        conn.execute("DELETE FROM manual_news WHERE id=?", (exc_id,))
+        conn.commit()
+        conn.close()
+        
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
+
+from fastapi import Request
 
 @app.post("/admin/exclusive/toggle/{exc_id}")
-async def admin_exclusive_toggle(exc_id: int, key: str = "", request: Request = None):
+async def admin_exclusive_toggle(exc_id: int, key: str, request: Request):
     """Скрыть/показать эксклюзив"""
     if key != ADMIN_KEY:
         return {"ok": False, "error": "forbidden"}
     
-    # Читаем JSON
-    body = await request.json()
-    is_pub = body.get('is_published', 1)
-    
-    conn = db()
-    conn.execute("UPDATE manual_news SET is_published=? WHERE id=?", (is_pub, exc_id))
-    conn.commit()
-    conn.close()
-    
-    return {"ok": True}
+    try:
+        # Читаем JSON из body
+        body = await request.json()
+        is_pub = body.get('is_published', 1)
+        
+        conn = db()
+        conn.execute("UPDATE manual_news SET is_published=? WHERE id=?", (is_pub, exc_id))
+        conn.commit()
+        conn.close()
+        
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 
