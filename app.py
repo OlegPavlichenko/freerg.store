@@ -1929,8 +1929,8 @@ def admin_exclusive_list(key: str = ""):
             # Цена
             price_html = ""
             if p_old or p_new:
-                old_str = f"{p_old:.0f}" if p_old else ""
-                new_str = f"{p_new:.0f}" if p_new else ""
+                old_str = f"{p_old:.2f}".rstrip('0').rstrip('.') if p_old else ""
+                new_str = f"{p_new:.2f}".rstrip('0').rstrip('.') if p_new else ""
                 curr_str = cur or "USD"
                 
                 if old_str and new_str:
