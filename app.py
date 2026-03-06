@@ -1982,39 +1982,62 @@ def admin_exclusive_list(key: str = ""):
         const KEY = '""" + key + """';
         
         async function toggle(id, val) {
+            // 🔥 ИСПРАВЛЕНИЕ: Преобразуем в число!
+            id = parseInt(id);
+            val = parseInt(val);
+            
+            console.log('Toggle:', {id, val, KEY});
+            
             try {
-                const r = await fetch(`/admin/exclusive/toggle/${{id}}?key=${{KEY}}`, {
+                const url = `/admin/exclusive/toggle/${id}?key=${KEY}`;
+                
+                const r = await fetch(url, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({is_published: val})
                 });
                 
-                if (r.ok) {
+                const json = await r.json();
+                console.log('Response:', json);
+                
+                if (r.ok && json.ok) {
                     location.reload();
                 } else {
-                    alert('Ошибка!');
+                    alert('Ошибка: ' + (json.error || 'Unknown'));
                 }
             } catch(e) {
-                alert('Ошибка: ' + e);
+                console.error('Error:', e);
+                alert('Ошибка: ' + e.message);
             }
         }
         
         async function del(id) {
+            // 🔥 ИСПРАВЛЕНИЕ: Преобразуем в число!
+            id = parseInt(id);
+            
             if (!confirm('Удалить этот эксклюзив навсегда?')) return;
             
+            console.log('Delete:', {id, KEY});
+            
             try {
-                const r = await fetch(`/admin/exclusive/delete/${{id}}?key=${{KEY}}`, {
+                const url = `/admin/exclusive/delete/${id}?key=${KEY}`;
+                
+                const r = await fetch(url, {
                     method: 'POST'
                 });
                 
-                if (r.ok) {
+                const json = await r.json();
+                console.log('Response:', json);
+                
+                if (r.ok && json.ok) {
                     alert('✅ Удалено!');
                     location.reload();
                 } else {
-                    alert('Ошибка!');
+                    alert('Ошибка: ' + (json.error || 'Unknown'));
                 }
             } catch(e) {
-                alert('Ошибка: ' + e);
+                console.error('Error:', e);
+                alert('Ошибка: ' + e.message);
             }
         }
         </script>
