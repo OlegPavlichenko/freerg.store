@@ -65,7 +65,7 @@ import re
 # Генерируй свой: echo -n "твой_пароль" | sha256sum
 ADMIN_PASSWORD_HASH = os.getenv(
     "ADMIN_PASSWORD_HASH",
-    "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"  # admin123
+    "9f3fd4cc3c3d4d80c229578b00dec9c253494ed2370b20caa23b3cf4bc63b3ba"  # admin123
 )
 
 def validate_lfg_text(text: str) -> tuple[bool, str | None]:
