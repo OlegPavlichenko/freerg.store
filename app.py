@@ -3017,9 +3017,9 @@ PAGE = Template("""
         <div class="header-content">
             <div class="brand">
                 <div class="mini-stats" data-tour="stats">
-  <div class="mini-stat">💸 Сэкономили сегодня: <b>{{ savings.saved_today or 0 }}</b></div>
-  <div class="mini-stat">📦 Клики сегодня: <b>{{ savings.clicks_today or 0 }}</b></div>
-  <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>{{ savings.saved_all or 0 }}</b></div>
+  <div class="mini-stat">💸 Сэкономили сегодня: <b>{{ (savings.saved_today or 0)|float|round(2) }}</b></div>
+  <div class="mini-stat">📦 Клики сегодня: <b>{{ (savings.clicks_today or 0)|float|round(2) }}</b></div>
+  <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>{{ (savings.saved_all or 0)|float|round(2) }}</b></div>
 </div>
                 </div>
               <h1>🎮 FreeRG.store</h1>
@@ -3440,15 +3440,15 @@ PAGE = Template("""
           <div style="font-size:0.85rem;color:var(--text-secondary);font-weight:700;white-space:nowrap;">
             {% if it.price_old is not none and it.price_new is not none and it.price_new < it.price_old %}
               <span style="opacity:.75;text-decoration:line-through;">
-                {{ "%.0f"|format(it.price_old) }} {{ it.currency }}
+                {{ (it.price_old or 0)|float|round(2) }} {{ it.currency }}
               </span>
               <span style="margin:0 6px;opacity:.6;">→</span>
               <span style="color:var(--text-primary);">
-                {{ "%.0f"|format(it.price_new) }} {{ it.currency }}
+                {{ (it.price_new or 0)|float|round(2) }} {{ it.currency }}
               </span>
             {% elif it.price_new is not none %}
               <span style="color:var(--text-primary);">
-                {{ "%.0f"|format(it.price_new) }} {{ it.currency }}
+                {{ (it.price_new or 0)|float|round(2) }} {{ it.currency }}
               </span>
             {% endif %}
           </div>
