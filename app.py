@@ -65,7 +65,7 @@ import re
 # Генерируй свой: echo -n "твой_пароль" | sha256sum
 ADMIN_PASSWORD_HASH = os.getenv(
     "ADMIN_PASSWORD_HASH",
-    "9f3fd4cc3c3d4d80c229578b00dec9c253494ed2370b20caa23b3cf4bc63b3ba"  # admin123
+    "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"  # admin123
 )
 
 def validate_lfg_text(text: str) -> tuple[bool, str | None]:
@@ -1708,387 +1708,6 @@ def admin_news_add(
     conn.close()
 
     return RedirectResponse(url=f"/admin/news?key={key}", status_code=302)
-
-# ✨ АДМИНКА ДЛЯ ЭКСКЛЮЗИВОВ
-# Использует тот же ADMIN_KEY что и /admin/news
-# Вставь ПОСЛЕ функции admin_news_add (после строки с RedirectResponse)
-
-@app.get("/admin/exclusive", response_class=HTMLResponse)
-def admin_exclusive_list(key: str = ""):
-    """Список всех эксклюзивов с управлением"""
-    if key != ADMIN_KEY:
-        return HTMLResponse("Forbidden - Add ?key=YOUR_KEY", status_code=403)
-    
-    conn = db()
-    
-    # Получаем все записи
-    rows = conn.execute("""
-        SELECT id, created_at, title, url, image_url, store, kind, 
-               price_old, price_new, currency, ends_at, is_published
-        FROM manual_news
-        ORDER BY created_at DESC
-    """).fetchall()
-    
-    # Статистика
-    total = len(rows)
-    active = sum(1 for r in rows if r[11])  # is_published
-    hidden = total - active
-    
-    conn.close()
-    
-    # HTML страница
-    html = f"""
-    <!doctype html>
-    <html>
-    <head>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width,initial-scale=1"/>
-        <title>Эксклюзивы - Админка</title>
-        <style>
-            body {{
-                font-family: system-ui;
-                background: #0a0e1a;
-                color: #e2e8f0;
-                padding: 24px;
-                margin: 0;
-            }}
-            .container {{
-                max-width: 1200px;
-                margin: 0 auto;
-            }}
-            h1 {{
-                margin: 0 0 20px 0;
-                font-size: 1.8rem;
-            }}
-            .stats {{
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 12px;
-                margin-bottom: 20px;
-            }}
-            .stat {{
-                background: #11162a;
-                border: 1px solid rgba(255,255,255,.1);
-                border-radius: 12px;
-                padding: 16px;
-            }}
-            .stat-value {{
-                font-size: 2rem;
-                font-weight: 700;
-                color: #4f46e5;
-            }}
-            .stat-label {{
-                opacity: 0.7;
-                font-size: 0.9rem;
-                margin-top: 4px;
-            }}
-            .btn {{
-                display: inline-block;
-                padding: 10px 16px;
-                border-radius: 12px;
-                border: 0;
-                background: #4f46e5;
-                color: white;
-                font-weight: 700;
-                cursor: pointer;
-                text-decoration: none;
-                margin-bottom: 20px;
-            }}
-            .btn:hover {{
-                background: #4338ca;
-            }}
-            .card {{
-                background: #11162a;
-                border: 1px solid rgba(255,255,255,.1);
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 12px;
-            }}
-            .card.hidden {{
-                opacity: 0.5;
-                border-color: rgba(255,100,100,0.3);
-            }}
-            .card-header {{
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 12px;
-            }}
-            .title {{
-                font-size: 1.2rem;
-                font-weight: 700;
-                margin-bottom: 8px;
-            }}
-            .badge {{
-                display: inline-block;
-                padding: 4px 8px;
-                border-radius: 6px;
-                font-size: 0.75rem;
-                font-weight: 700;
-                text-transform: uppercase;
-            }}
-            .badge-active {{
-                background: rgba(34,197,94,0.2);
-                color: #22c55e;
-            }}
-            .badge-hidden {{
-                background: rgba(239,68,68,0.2);
-                color: #ef4444;
-            }}
-            .meta {{
-                display: flex;
-                gap: 12px;
-                margin: 8px 0;
-                font-size: 0.9rem;
-                opacity: 0.8;
-            }}
-            .price {{
-                font-size: 1.1rem;
-                font-weight: 700;
-                color: #22c55e;
-                margin: 8px 0;
-            }}
-            .price-old {{
-                text-decoration: line-through;
-                opacity: 0.6;
-                margin-right: 8px;
-            }}
-            .actions {{
-                display: flex;
-                gap: 8px;
-                margin-top: 12px;
-            }}
-            .btn-sm {{
-                padding: 6px 12px;
-                border-radius: 8px;
-                border: 0;
-                font-weight: 600;
-                cursor: pointer;
-                font-size: 0.85rem;
-            }}
-            .btn-delete {{
-                background: #ef4444;
-                color: white;
-            }}
-            .btn-delete:hover {{
-                background: #dc2626;
-            }}
-            .btn-hide {{
-                background: #f59e0b;
-                color: white;
-            }}
-            .btn-hide:hover {{
-                background: #d97706;
-            }}
-            .btn-show {{
-                background: #22c55e;
-                color: white;
-            }}
-            .btn-show:hover {{
-                background: #16a34a;
-            }}
-            .url {{
-                color: #818cf8;
-                font-size: 0.85rem;
-                word-break: break-all;
-                margin: 8px 0;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🛡️ Управление эксклюзивами</h1>
-            
-            <a href="/admin/news?key={key}" class="btn">➕ Добавить новый</a>
-            
-            <div class="stats">
-                <div class="stat">
-                    <div class="stat-value">{total}</div>
-                    <div class="stat-label">Всего</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{active}</div>
-                    <div class="stat-label">Активные (на сайте)</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value">{hidden}</div>
-                    <div class="stat-label">Скрытые</div>
-                </div>
-            </div>
-    """
-    
-    if not rows:
-        html += '<div class="card"><p>Нет эксклюзивов. <a href="/admin/news?key=' + key + '">Добавить первый →</a></p></div>'
-    else:
-        for r in rows:
-            exc_id, created, title, url, img, store, kind, p_old, p_new, cur, ends, is_pub = r
-            
-            # Иконка магазина
-            store_icon = {"steam": "🎮", "epic": "🟦", "gog": "🟪", "prime": "🟨"}.get(store or "", "📦")
-            
-            # Цена
-            price_html = ""
-            if p_old or p_new:
-                old_str = f"{p_old:.2f}".rstrip('0').rstrip('.') if p_old else ""
-                new_str = f"{p_new:.2f}".rstrip('0').rstrip('.') if p_new else ""
-                curr_str = cur or "USD"
-                
-                if old_str and new_str:
-                    price_html = f'<div class="price"><span class="price-old">{old_str} {curr_str}</span>→ {new_str} {curr_str}</div>'
-                elif new_str:
-                    price_html = f'<div class="price">{new_str} {curr_str}</div>'
-            
-            # Статус
-            status = "АКТИВЕН" if is_pub else "СКРЫТ"
-            badge_class = "badge-active" if is_pub else "badge-hidden"
-            card_class = "card" if is_pub else "card hidden"
-            
-            # Кнопки
-            toggle_btn = f'<button class="btn-sm btn-hide" onclick="toggle({exc_id}, 0)">👁️ Скрыть</button>' if is_pub else f'<button class="btn-sm btn-show" onclick="toggle({exc_id}, 1)">✅ Показать</button>'
-            
-            html += f"""
-            <div class="{card_class}">
-                <div class="card-header">
-                    <div>
-                        <div class="title">{store_icon} {title}</div>
-                        <span class="badge {badge_class}">{status}</span>
-                    </div>
-                    <div style="opacity:0.6;font-size:0.85rem">ID: {exc_id}</div>
-                </div>
-                
-                <div class="meta">
-                    <span>🏪 {store or 'other'}</span>
-                    <span>📁 {kind or 'news'}</span>
-                    {f'<span>⏰ до {ends[:16]}</span>' if ends else ''}
-                    <span>📅 {created[:10] if created else ''}</span>
-                </div>
-                
-                {price_html}
-                
-                <div class="url">🔗 {url[:100]}{'...' if len(url) > 100 else ''}</div>
-                
-                <div class="actions">
-                    {toggle_btn}
-                    <button class="btn-sm btn-delete" onclick="del({exc_id})">🗑 Удалить</button>
-                    <a href="{url}" target="_blank" class="btn-sm" style="background:#3b82f6;color:white;text-decoration:none">🔗 Открыть</a>
-                </div>
-            </div>
-            """
-    
-    html += """
-        </div>
-        
-        <script>
-        const KEY = '""" + key + """';
-        
-        async function toggle(id, val) {
-            // 🔥 ИСПРАВЛЕНИЕ: Преобразуем в число!
-            id = parseInt(id);
-            val = parseInt(val);
-            
-            console.log('Toggle:', {id, val, KEY});
-            
-            try {
-                const url = `/admin/exclusive/toggle/${id}?key=${KEY}`;
-                
-                const r = await fetch(url, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({is_published: val})
-                });
-                
-                const json = await r.json();
-                console.log('Response:', json);
-                
-                if (r.ok && json.ok) {
-                    location.reload();
-                } else {
-                    alert('Ошибка: ' + (json.error || 'Unknown'));
-                }
-            } catch(e) {
-                console.error('Error:', e);
-                alert('Ошибка: ' + e.message);
-            }
-        }
-        
-        async function del(id) {
-            // 🔥 ИСПРАВЛЕНИЕ: Преобразуем в число!
-            id = parseInt(id);
-            
-            if (!confirm('Удалить этот эксклюзив навсегда?')) return;
-            
-            console.log('Delete:', {id, KEY});
-            
-            try {
-                const url = `/admin/exclusive/delete/${id}?key=${KEY}`;
-                
-                const r = await fetch(url, {
-                    method: 'POST'
-                });
-                
-                const json = await r.json();
-                console.log('Response:', json);
-                
-                if (r.ok && json.ok) {
-                    alert('✅ Удалено!');
-                    location.reload();
-                } else {
-                    alert('Ошибка: ' + (json.error || 'Unknown'));
-                }
-            } catch(e) {
-                console.error('Error:', e);
-                alert('Ошибка: ' + e.message);
-            }
-        }
-        </script>
-    </body>
-    </html>
-    """
-    
-    return HTMLResponse(html)
-
-
-@app.post("/admin/exclusive/delete/{exc_id}")
-async def admin_exclusive_delete(exc_id: int, key: str = ""):
-    """Удалить эксклюзив"""
-    if key != ADMIN_KEY:
-        return {"ok": False, "error": "forbidden"}
-    
-    try:
-        conn = db()
-        conn.execute("DELETE FROM manual_news WHERE id=?", (exc_id,))
-        conn.commit()
-        conn.close()
-        
-        return {"ok": True}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-from fastapi import Request
-
-@app.post("/admin/exclusive/toggle/{exc_id}")
-async def admin_exclusive_toggle(exc_id: int, key: str, request: Request):
-    """Скрыть/показать эксклюзив"""
-    if key != ADMIN_KEY:
-        return {"ok": False, "error": "forbidden"}
-    
-    try:
-        # Читаем JSON из body
-        body = await request.json()
-        is_pub = body.get('is_published', 1)
-        
-        conn = db()
-        conn.execute("UPDATE manual_news SET is_published=? WHERE id=?", (is_pub, exc_id))
-        conn.commit()
-        conn.close()
-        
-        return {"ok": True}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
-
-
-
 
 # --------------------
 # SAVE + POST
@@ -3997,306 +3616,89 @@ def images_for_row(row_store: str | None, url: str, image_url: str | None):
     return "", ""
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
-# ИСПРАВЛЕННАЯ ФУНКЦИЯ INDEX()
-# Замени с строки 3583 до строки 3879
-
 def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
     conn = db()
     
-    # Нормализация параметров
+    # Нормализация
     store = (store or "all").strip().lower()
-    if store not in {"all", "steam", "epic", "gog", "prime"}:
-        store = "all"
-    
     kind = (kind or "all").strip().lower()
-    if kind not in {"all", "keep", "weekend", "free", "deals"}:
-        kind = "all"
-    
-    # ===== ФУНКЦИИ ФИЛЬТРАЦИИ =====
-    def allow_time(ends_at: str | None) -> bool:
-        if is_active_end(ends_at):
-            return True
-        return bool(show_expired) and is_expired_recent(ends_at, days=7)
-    
-    def allow_store(row_store: str | None) -> bool:
-        if store == "all":
-            return True
-        return (row_store or "").strip().lower() == store
-    
-    # ===== ПОЛУЧАЕМ ДАННЫЕ ИЗ БД =====
-    
-    # Free to Keep
-    keep_rows = conn.execute("""
-        SELECT id, store, title, url, image_url, ends_at, created_at
-        FROM deals
-        WHERE kind='free_to_keep'
-        ORDER BY created_at DESC
-        LIMIT 150
-    """).fetchall()
-    
-    # Free Weekend
-    weekend_rows = conn.execute("""
-        SELECT id, store, title, url, image_url, ends_at, created_at
-        FROM deals
-        WHERE kind='free_weekend'
-        ORDER BY created_at DESC
-        LIMIT 150
-    """).fetchall()
-    
-    # Hot Deals (витрина 20 игр: 6x90%+ и 14x70-89%)
-    HOT_TOTAL = 20
-    HOT_90 = 6
-    HOT_70_89 = 14
-    
-    hot_rows = []
-    
-    # 1) Скидки 90%+
-    hot_rows += conn.execute("""
-        SELECT id, store, title, url, image_url, ends_at, created_at,
-               discount_pct, price_old, price_new, currency
-        FROM deals
-        WHERE kind='hot_deal' AND discount_pct >= 90
-        ORDER BY RANDOM()
-        LIMIT ?
-    """, (HOT_90,)).fetchall()
-    
-    # 2) Скидки 70-89%
-    hot_rows += conn.execute("""
-        SELECT id, store, title, url, image_url, ends_at, created_at,
-               discount_pct, price_old, price_new, currency
-        FROM deals
-        WHERE kind='hot_deal' AND discount_pct BETWEEN 70 AND 89
-        ORDER BY RANDOM()
-        LIMIT ?
-    """, (HOT_70_89,)).fetchall()
-    
-    # 3) Фоллбек если мало
-    if len(hot_rows) < HOT_TOTAL:
-        need = HOT_TOTAL - len(hot_rows)
-        hot_rows += conn.execute("""
-            SELECT id, store, title, url, image_url, ends_at, created_at,
-                   discount_pct, price_old, price_new, currency
-            FROM deals
-            WHERE kind='hot_deal' AND discount_pct >= 70
-            ORDER BY RANDOM()
-            LIMIT ?
-        """, (need,)).fetchall()
-    
-    # Убираем дубли
-    uniq = {}
-    for r in hot_rows:
-        uniq[r[0]] = r
-    hot_rows = list(uniq.values())[:HOT_TOTAL]
-    
-    # Free Games (F2P)
-    free_games_rows = conn.execute("""
-        SELECT store, title, url, image_url, note
-        FROM free_games
-        ORDER BY sort ASC, created_at DESC
-        LIMIT 24
-    """).fetchall()
-    
-    # LFG заявки
-    lfg_rows = conn.execute("""
-        SELECT id, created_at, game, region, platform, note, tg, expires_at
-        FROM lfg
-        WHERE active=1
-          AND (expires_at IS NULL OR expires_at > ?)
-        ORDER BY created_at DESC
-        LIMIT 12
-    """, (datetime.utcnow().isoformat(),)).fetchall()
-    
-    # Manual News (Эксклюзивы)
-    manual_rows = conn.execute("""
-        SELECT id, created_at, title, url, image_url, store, kind,
-                price_old, price_new, currency, ends_at
-        FROM manual_news
-        WHERE is_published=1
-        ORDER BY datetime(created_at) DESC
-        LIMIT 12
-    """).fetchall()
-    
-    conn.close()
-    
-    # ===== ОБРАБАТЫВАЕМ ДАННЫЕ =====
-    
-    # Keep
+
+    # Списки для рендеринга
     keep = []
-    for r in keep_rows:
-        did, st, title, url, image_url, ends_at, created_at = r
-        
-        if not (allow_time(ends_at) and allow_store(st)):
-            continue
-        
-        img_main, img_fb = images_for_row(st, url, image_url)
-        
-        keep.append({
-            "id": did,
-            "store": (st or "").strip().lower(),
-            "store_badge": store_badge(st),
-            "title": title,
-            "url": url,
-            "image": img_main,
-            "image_fallback": img_fb,
-            "ends_at": ends_at,
-            "is_new": is_new(created_at),
-            "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
-            "created_at": created_at,
-            "expired": not is_active_end(ends_at),
-            "time_left": time_left_label(ends_at),
-            "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=keep",
-        })
-    
-    # Weekend
     weekend = []
-    for r in weekend_rows:
-        did, st, title, url, image_url, ends_at, created_at = r
-        
-        if not (allow_time(ends_at) and allow_store(st)):
-            continue
-        
-        img_main, img_fb = images_for_row(st, url, image_url)
-        
-        weekend.append({
-            "id": did,
-            "store": (st or "").strip().lower(),
-            "store_badge": store_badge(st),
-            "title": title,
-            "url": url,
-            "image": img_main,
-            "image_fallback": img_fb,
-            "ends_at": ends_at,
-            "is_new": is_new(created_at),
-            "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
-            "created_at": created_at,
-            "expired": not is_active_end(ends_at),
-            "time_left": time_left_label(ends_at),
-            "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=weekend",
-        })
-    
-    # Hot Deals
     hot = []
-    for r in hot_rows:
-        did, st, title, url, image_url, ends_at, created_at, discount_pct, price_old, price_new, currency = r
-        
-        if not allow_store(st):
-            continue
-        
-        img_main, img_fb = images_for_row(st, url, image_url)
-        
-        hot.append({
-            "id": did,
-            "store": (st or "").strip().lower(),
-            "store_badge": store_badge(st),
-            "title": title,
-            "url": url,
-            "image": img_main,
-            "image_fallback": img_fb,
-            "ends_at": ends_at,
-            "is_new": is_new(created_at),
-            "ends_at_fmt": format_expiry(ends_at) if ends_at else "",
-            "created_at": created_at,
-            "expired": not is_active_end(ends_at),
-            "time_left": time_left_label(ends_at),
-            "discount_pct": discount_pct,
-            "price_old": price_old,
-            "price_new": price_new,
-            "currency": currency,
-            "price_old_fmt": fmt_price(price_old),
-            "price_new_fmt": fmt_price(price_new),
-            "currency_sym": currency_symbol(currency),
-            "go_url": f"{SITE_BASE}/go/{did}?src=site&utm_campaign=freeredeemgames&utm_content=deals",
-        })
-    
-    # LFG
-    lfg = []
-    for r in lfg_rows:
-        lfg.append({
-            "id": r[0],
-            "created_at": r[1],
-            "game": r[2],
-            "region": r[3],
-            "platform": r[4],
-            "note": r[5],
-            "tg": r[6],
-            "tg_url": f"{SITE_BASE}/tg/lfg/{r[0]}",
-        })
-    
-    # Manual (Эксклюзивы)
-    manual_items = []
-    for (mid, created_at, title, url, image_url, store_val, kind_val, po, pn, cur, ends_at) in manual_rows:
-        store_norm = (store_val or "").strip().lower()
-        badge = store_badge(store_norm)
-        img_main, _ = images_for_row(store_norm, url, image_url)
-        
-        manual_items.append({
-            "id": f"m_{mid}",
-            "title": title,
-            "url": url,
-            "image": img_main,
-            "badge": badge,
-            "store": store_norm,
-            "kind": kind_val or "news",
-            "price_old": (f"{po:.2f}".rstrip('0').rstrip('.') if po else None),
-            "price_new": (f"{po:.2f}".rstrip('0').rstrip('.') if po else None),
-            "currency": cur or "USD",
-            "ends_at_fmt": (format_expiry(ends_at) if ends_at else ""),
-            "go": f"/go_manual/{mid}?src=manual",
-        })
-    
-    # Free Games
-    free_games = []
-    for st, title, url, image_url, note in free_games_rows:
-        st_norm = (st or "").strip().lower()
-        img = image_url or ""
-        if not img and st_norm == "steam":
-            img = steam_header_cdn_from_url(url) or ""
-        
-        free_games.append({
-            "store": st_norm,
-            "store_badge": store_badge(st_norm),
-            "title": title,
-            "url": url,
-            "image_url": img,
-            "note": note,
-            "go_url": url,  # F2P идёт напрямую в магазин
-        })
-    
-    # Сортируем по дате окончания
-    keep.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
-    weekend.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
-    hot.sort(key=lambda d: sort_key_by_ends(d["ends_at"]))
-    
+
+    # 1. Получаем Free to Keep
+    if kind in ["all", "keep"]:
+        rows = conn.execute("""
+            SELECT id, store, title, url, image_url, ends_at, created_at 
+            FROM deals WHERE kind='free_to_keep' 
+            ORDER BY created_at DESC LIMIT 150
+        """).fetchall()
+        for r in rows:
+            # Безопасная фильтрация по времени и магазину
+            if not (allow_time(r['ends_at'], show_expired) and allow_store(r['store'], store)):
+                continue
+            img_main, img_fb = images_for_row(r['store'], r['url'], r['image_url'])
+            keep.append(build_item_dict(r, img_main, img_fb, "keep"))
+
+    # 2. Получаем Weekend (аналогично)
+    if kind in ["all", "weekend"]:
+        rows = conn.execute("SELECT id, store, title, url, image_url, ends_at, created_at FROM deals WHERE kind='free_weekend' ORDER BY created_at DESC").fetchall()
+        for r in rows:
+            if not (allow_time(r['ends_at'], show_expired) and allow_store(r['store'], store)):
+                continue
+            img_main, img_fb = images_for_row(r['store'], r['url'], r['image_url'])
+            weekend.append(build_item_dict(r, img_main, img_fb, "weekend"))
+
+    # 3. Получаем Hot Deals (упрощенная выборка для стабильности)
+    if kind in ["all", "deals"]:
+        # Достаем все скидки выше 70%
+        hot_rows = conn.execute("""
+            SELECT id, store, title, url, image_url, ends_at, created_at, 
+                   discount_pct, price_old, price_new, currency 
+            FROM deals WHERE kind='hot_deal' AND discount_pct >= 70
+            ORDER BY discount_pct DESC LIMIT 40
+        """).fetchall()
+        for r in hot_rows:
+            if not allow_store(r['store'], store): continue
+            img_main, img_fb = images_for_row(r['store'], r['url'], r['image_url'])
+            # Собираем данные скидки
+            item = build_item_dict(r, img_main, img_fb, "deals")
+            item.update({
+                "discount_pct": r['discount_pct'],
+                "price_old_fmt": fmt_price(r['price_old']),
+                "price_new_fmt": fmt_price(r['price_new']),
+                "currency_sym": currency_symbol(r['currency'])
+            })
+            hot.append(item)
+
+    # LFG и прочее (теперь через r['id'] будет работать)
+    lfg_rows = conn.execute("SELECT * FROM lfg WHERE active=1 ORDER BY created_at DESC LIMIT 12").fetchall()
+    lfg = [dict(r) for r in lfg_rows] # конвертируем в список словарей для Jinja
+
     # Статистика
-    total_games = len(keep) + len(weekend) + len(hot)
-    new_today = sum(1 for g in (keep + weekend + hot) if g.get("is_new"))
-    expiring_soon = sum(
-        1 for g in (keep + weekend)
-        if g.get("time_left") and ("час" in g.get("time_left", "") or "мин" in g.get("time_left", ""))
-    )
-    last_update = datetime.now().strftime("%d.%m.%Y %H:%M")
-    
-    stats = calc_savings(db())
-    
-    # Рендерим страницу
+    stats = calc_savings(conn)
+    conn.close()
+
     return PAGE.render(
-        keep=keep,
-        weekend=weekend,
-        hot=hot,
+        keep=keep, 
+        weekend=weekend, 
+        hot=hot, 
+        lfg=lfg,
+        store=store, 
+        kind=kind, 
+        show_expired=show_expired,
+        savings=stats, 
+        last_update=datetime.now().strftime("%d.%m %H:%M"),
         free_games=free_games,
         steam_min=STEAM_MIN,
         epic_min=EPIC_MIN,
-        show_expired=int(show_expired),
-        store=store,
-        kind=kind,
         total_games=total_games,
         new_today=new_today,
         expiring_soon=expiring_soon,
-        last_update=last_update,
         generate_placeholder=lambda t, s: "",
-        lfg=lfg,
         tg_group_url=TG_GROUP_URL,
-        savings=stats,
         manual=manual_items,
     )
 
@@ -5717,7 +5119,6 @@ def admin_cleanup(request: Request):
     conn.close()
     
     return {"ok": True, "deleted": deleted}
-
 
 
 
