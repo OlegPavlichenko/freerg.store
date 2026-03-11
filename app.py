@@ -3439,15 +3439,15 @@ PAGE = Template("""
           <div style="font-size:0.85rem;color:var(--text-secondary);font-weight:700;white-space:nowrap;">
             {% if it.price_old is not none and it.price_new is not none and it.price_new < it.price_old %}
               <span style="opacity:.75;text-decoration:line-through;">
-                {{ "%.0f"|format(it.price_old) }} {{ it.currency }}
+                {{ "%.0f"|format(it.price_old or 0)|float) }} {{ it.currency }}
               </span>
               <span style="margin:0 6px;opacity:.6;">→</span>
               <span style="color:var(--text-primary);">
-                {{ "%.0f"|format(it.price_new) }} {{ it.currency }}
+                {{ "%.0f"|format(it.price_new or 0)|float) }} {{ it.currency }}
               </span>
             {% elif it.price_new is not none %}
               <span style="color:var(--text-primary);">
-                {{ "%.0f"|format(it.price_new) }} {{ it.currency }}
+                {{ "%.0f"|format(it.price_new or 0)|float) }} {{ it.currency }}
               </span>
             {% endif %}
           </div>
