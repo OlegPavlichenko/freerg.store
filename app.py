@@ -4238,7 +4238,7 @@ def index(show_expired: int = 0, store: str = "all", kind: str = "all"):
             "store": store_norm,
             "kind": kind_val or "news",
             "price_old": (f"{po:.2f}".rstrip('0').rstrip('.') if po else None),
-            "price_new": (f"{po:.2f}".rstrip('0').rstrip('.') if po else None),
+            "price_new": (f"{pn:.2f}".rstrip('0').rstrip('.') if pn else None),
             "currency": cur or "USD",
             "ends_at_fmt": (format_expiry(ends_at) if ends_at else ""),
             "go": f"/go_manual/{mid}?src=manual",
