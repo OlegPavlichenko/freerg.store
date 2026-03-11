@@ -3017,9 +3017,9 @@ PAGE = Template("""
         <div class="header-content">
             <div class="brand">
                 <div class="mini-stats" data-tour="stats">
-  <div class="mini-stat">💸 Сэкономили сегодня: <b>{{ "%.2f"|format(savings.saved_today or 0|float) }}</b></div>
+  <div class="mini-stat">💸 Сэкономили сегодня: <b>{{ "%.2f"|format((savings.saved_today or 0)|float) }}</b></div>
   <div class="mini-stat">📦 Клики сегодня: <b>{{ savings.clicks_today }}</b></div>
-  <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>{{ "%.2f"|format(savings.saved_all or 0|float) }}</b></div>
+  <div class="mini-stat" style="opacity:.8">Всего сэкономили: <b>{{ "%.2f"|format((savings.saved_all or 0)|float) }}</b></div>
 </div></div>
               <h1>🎮 FreeRG.store</h1>
               <p>Актуальные бесплатные игры и скидки</p>
